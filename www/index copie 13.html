@@ -1,0 +1,2090 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net;
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+  font-src https://fonts.gstatic.com;
+  img-src 'self' data: blob: https://upload.wikimedia.org https://*.wikimedia.org https://*.wikipedia.org;
+  connect-src 'self' https://*.cartocdn.com https://unpkg.com https://cdn.jsdelivr.net capacitor: ionic:;
+  frame-src 'none';
+">
+<title>Cimetières Célèbres</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --bg:            #141410;
+    --surface:       #1d1d19;
+    --card:          #252521;
+    --card-hover:    #2d2d29;
+    --gold:          #c8a96e;
+    --gold-dim:      #7a6438;
+    --text:          #e8e2d5;
+    --text-muted:    #8a8175;
+    --text-faint:    #55534e;
+    --border:        rgba(200,169,110,0.10);
+    --border-strong: rgba(200,169,110,0.22);
+    --pl:            #7fa3d0;
+    --mp:            #b494d8;
+    --pl-bg:         rgba(127,163,208,0.12);
+    --mp-bg:         rgba(180,148,216,0.12);
+    --danger:        #d05a5a;
+    --danger-bg:     rgba(208,90,90,0.12);
+    --nav-h:         64px;
+    --st:            env(safe-area-inset-top, 0px);
+    --sb:            env(safe-area-inset-bottom, 0px);
+  }
+  html, body { background:var(--bg); color:var(--text); font-family:'Jost',sans-serif; font-size:16px; height:100%; overflow:hidden; -webkit-font-smoothing:antialiased; -webkit-text-size-adjust:none; }
+  #app { position:fixed; inset:0; display:flex; flex-direction:column; background:var(--bg); }
+
+  /* Header */
+  .app-header { padding:calc(var(--st) + 14px) 16px 12px; background:var(--bg); border-bottom:1px solid var(--border); flex-shrink:0; }
+  .header-top { display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:12px; }
+  .app-title { font-family:'Cormorant Garamond',serif; font-size:30px; font-weight:300; color:var(--gold); letter-spacing:.01em; line-height:1; }
+  .app-title em { font-style:italic; font-weight:400; }
+  .header-right { display:flex; align-items:center; gap:10px; padding-bottom:3px; }
+  .header-sub { font-size:11px; color:var(--text-faint); letter-spacing:.1em; text-transform:uppercase; font-weight:500; }
+  .edit-toggle { background:none; border:1px solid var(--border-strong); border-radius:10px; padding:4px 10px; font-family:'Jost',sans-serif; font-size:12px; font-weight:500; color:var(--text-muted); cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:5px; }
+  .edit-toggle svg { width:13px; height:13px; flex-shrink:0; }
+  .edit-toggle.on { background:rgba(200,169,110,.12); border-color:var(--gold); color:var(--gold); }
+
+  .search-wrap { position:relative; margin-bottom:10px; }
+  .search-input { width:100%; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:9px 12px 9px 38px; color:var(--text); font-family:'Jost',sans-serif; font-size:16px; outline:none; -webkit-appearance:none; appearance:none; }
+  .search-input::placeholder { color:var(--text-faint); }
+  .search-input:focus { border-color:var(--border-strong); }
+  .search-icon { position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--text-faint); pointer-events:none; }
+
+  .filters { display:flex; gap:8px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px; }
+  .filters::-webkit-scrollbar { display:none; }
+  .chip { flex-shrink:0; padding:5px 14px; border-radius:20px; border:1px solid var(--border-strong); background:transparent; color:var(--text-muted); font-family:'Jost',sans-serif; font-size:13px; font-weight:400; cursor:pointer; transition:all .2s; }
+  .chip.active { background:var(--gold); border-color:var(--gold); color:#141410; font-weight:500; }
+  .chip.pl.active { background:var(--pl); border-color:var(--pl); color:#0d1f33; }
+  .chip.mp.active { background:var(--mp); border-color:var(--mp); color:#1e0d33; }
+
+  /* Views */
+  .view { display:none; flex:1; overflow:hidden; }
+  .view.active { display:flex; flex-direction:column; }
+
+  .list-scroll { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 16px; padding-bottom:calc(var(--nav-h) + var(--sb) + 28px); }
+  .count-line { font-size:11px; color:var(--text-faint); letter-spacing:.09em; text-transform:uppercase; font-weight:500; margin-bottom:12px; }
+
+  /* Grave cards */
+  .grave-card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:13px 13px 13px 16px; margin-bottom:9px; display:flex; gap:12px; cursor:pointer; transition:background .12s; position:relative; overflow:hidden; }
+  .grave-card:active { background:var(--card-hover); }
+  .grave-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; }
+  .grave-card.pere-lachaise::before { background:var(--pl); }
+  .grave-card.montparnasse::before  { background:var(--mp); }
+  .grave-card.edit-on { border-color:rgba(200,169,110,.2); padding-right:42px; }
+
+  .card-edit-btn { display:none; position:absolute; top:50%; right:10px; transform:translateY(-50%); width:26px; height:26px; border-radius:50%; background:rgba(200,169,110,.12); border:1px solid var(--border-strong); font-size:12px; line-height:1; cursor:pointer; align-items:center; justify-content:center; flex-shrink:0; }
+  .edit-mode .grave-card .card-edit-btn { display:flex; }
+  .card-del-btn { display:none; position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:50%; background:var(--danger-bg); border:1px solid var(--danger); color:var(--danger); font-size:13px; line-height:1; cursor:pointer; align-items:center; justify-content:center; flex-shrink:0; }
+  .edit-mode .grave-card.custom .card-del-btn { display:flex; }
+  /* quand les deux boutons sont visibles, décaler le del en haut et edit au milieu */
+  .edit-mode .grave-card.custom .card-edit-btn { right:10px; top:calc(50% + 18px); }
+  .grave-card.custom { padding-right:42px; }
+  .grave-card:not(.custom) { padding-right:42px; }
+
+  .grave-thumb { width:62px; height:62px; border-radius:10px; overflow:hidden; flex-shrink:0; background:var(--surface); display:flex; align-items:center; justify-content:center; }
+  .grave-thumb img { width:100%; height:100%; object-fit:cover; }
+  .thumb-initials { font-family:'Cormorant Garamond',serif; font-size:20px; font-style:italic; font-weight:300; color:var(--gold-dim); }
+
+  .grave-info { flex:1; min-width:0; }
+  .grave-name { font-family:'Cormorant Garamond',serif; font-size:20px; font-weight:400; color:var(--text); line-height:1.1; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .grave-dates { font-size:12px; color:var(--text-muted); margin-bottom:5px; }
+  .grave-meta { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:3px; }
+  .gtag { font-size:11px; font-weight:500; padding:2px 8px; border-radius:6px; letter-spacing:.03em; flex-shrink:0; }
+  .gtag.pere-lachaise { background:var(--pl-bg); color:var(--pl); }
+  .gtag.montparnasse  { background:var(--mp-bg); color:var(--mp); }
+  .div-tag { font-size:11px; font-weight:400; padding:2px 7px; border-radius:6px; background:rgba(200,169,110,.07); color:var(--gold-dim); border:1px solid rgba(200,169,110,.12); flex-shrink:0; }
+  .custom-badge { font-size:10px; font-weight:500; padding:2px 6px; border-radius:5px; background:rgba(200,169,110,.15); color:var(--gold); }
+  .grave-prof { font-size:12px; color:var(--text-faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  .fav-btn { background:none; border:none; padding:4px 0 4px 4px; cursor:pointer; color:var(--text-faint); transition:color .2s; flex-shrink:0; font-size:18px; line-height:1; align-self:flex-start; }
+  .fav-btn.on { color:var(--gold); }
+
+  /* List fab */
+  .list-fab-area { text-align:center; margin-top:6px; }
+  .list-fab { display:none; background:var(--gold); color:#141410; border:none; border-radius:14px; padding:12px 28px; font-family:'Jost',sans-serif; font-size:14px; font-weight:500; cursor:pointer; }
+  .edit-mode .list-fab { display:inline-block; }
+
+  /* Map */
+  #map { flex:1; width:100%; }
+  .leaflet-container { background:#18180f !important; }
+  .custom-marker { width:32px; height:32px; border-radius:50%; border:2.5px solid rgba(255,255,255,.25); display:flex; align-items:center; justify-content:center; font-family:'Jost',sans-serif; font-size:9px; font-weight:500; color:white; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.5); }
+  .custom-marker.pl { background:var(--pl); }
+  .custom-marker.mp { background:var(--mp); }
+  .custom-marker.cust { border-style:dashed; border-color:var(--gold); }
+
+  .map-legend { position:absolute; bottom:calc(var(--nav-h) + var(--sb) + 12px); left:12px; background:rgba(29,29,25,.92); border:1px solid var(--border-strong); border-radius:12px; padding:10px 14px; z-index:500; backdrop-filter:blur(8px); }
+  .map-chip { padding:6px 14px; border-radius:20px; border:1px solid rgba(255,255,255,.2); background:rgba(29,29,25,.88); color:var(--text-muted); font-family:'Jost',sans-serif; font-size:13px; font-weight:400; cursor:pointer; backdrop-filter:blur(8px); white-space:nowrap; transition:all .2s; }
+  .map-chip.active { background:var(--gold); border-color:var(--gold); color:#141410; font-weight:500; }
+  .map-chip.pl.active { background:var(--pl); border-color:var(--pl); color:#0d1f33; }
+  .map-chip.mp.active { background:var(--mp); border-color:var(--mp); color:#1e0d33; }
+  .legend-row { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-muted); }
+  .legend-row + .legend-row { margin-top:5px; }
+  .legend-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
+  .map-fab { position:absolute; bottom:calc(var(--nav-h) + var(--sb) + 14px); right:14px; width:50px; height:50px; border-radius:50%; background:var(--gold); border:none; color:#141410; font-size:28px; font-weight:300; line-height:1; cursor:pointer; z-index:500; box-shadow:0 4px 16px rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; transition:transform .15s; }
+  .map-fab:active { transform:scale(.92); }
+  .edit-mode .map-fab { display:flex; }
+
+  /* Bottom Nav */
+  .bottom-nav { display:flex; background:var(--surface); border-top:1px solid var(--border); height:calc(var(--nav-h) + var(--sb)); padding-bottom:var(--sb); flex-shrink:0; z-index:100; }
+  .nav-btn { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; background:none; border:none; cursor:pointer; color:var(--text-faint); transition:color .2s; padding:8px 4px; }
+  .nav-btn.active { color:var(--gold); }
+  .nav-icon { width:22px; height:22px; }
+  .nav-label { font-size:10px; font-weight:500; letter-spacing:.03em; }
+
+  /* Empty state */
+  .empty-state { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:40px 24px; text-align:center; }
+  .empty-icon { font-family:'Cormorant Garamond',serif; font-size:52px; font-style:italic; color:var(--gold-dim); line-height:1; margin-bottom:4px; }
+  .empty-text { font-size:15px; color:var(--text-faint); line-height:1.5; max-width:220px; }
+
+  /* Overlay + Sheet */
+  .overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:200; backdrop-filter:blur(3px); }
+  .overlay.on { display:block; }
+  .sheet { position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-radius:22px 22px 0 0; border-top:1px solid var(--border-strong); max-height:93dvh; overflow-y:auto; -webkit-overflow-scrolling:touch; z-index:300; transform:translateY(100%); transition:transform .38s cubic-bezier(.32,.72,0,1); padding-bottom:calc(var(--sb) + 28px); }
+  .sheet.on { transform:translateY(0); }
+  .sheet-handle { width:44px; height:5px; background:var(--text-muted); border-radius:3px; pointer-events:none; }
+
+  /* Photo tabs */
+  .photo-tabs { display:flex; gap:0; border-bottom:1px solid var(--border); margin:16px 20px 0; }
+  .photo-tab { flex:1; padding:9px 8px; text-align:center; font-size:12px; font-weight:500; color:var(--text-faint); cursor:pointer; border-bottom:2px solid transparent; transition:all .2s; }
+  .photo-tab.active { color:var(--gold); border-bottom-color:var(--gold); }
+  .photo-panel { display:none; }
+  .photo-panel.active { display:block; }
+  .photo-wrap { width:100%; height:230px; overflow:hidden; position:relative; background:var(--card); }
+  .photo-wrap img { width:100%; height:100%; object-fit:cover; display:block; }
+  .hero-fallback { width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-family:'Cormorant Garamond',serif; font-size:80px; font-style:italic; font-weight:300; color:var(--gold-dim); }
+  .hero-grad { position:absolute; bottom:0; left:0; right:0; height:90px; background:linear-gradient(to top,var(--surface),transparent); pointer-events:none; }
+
+  .sheet-body { padding:0 20px 4px; }
+  .sheet-tag { display:inline-block; font-size:11px; font-weight:500; letter-spacing:.06em; text-transform:uppercase; padding:3px 10px; border-radius:8px; margin:14px 0 4px; }
+  .sheet-tag.pere-lachaise { background:var(--pl-bg); color:var(--pl); }
+  .sheet-tag.montparnasse  { background:var(--mp-bg); color:var(--mp); }
+  .sheet-division { font-size:13px; color:var(--gold-dim); margin-bottom:8px; font-weight:500; letter-spacing:.02em; }
+  .sheet-name { font-family:'Cormorant Garamond',serif; font-size:34px; font-weight:400; line-height:1.05; margin-bottom:5px; }
+  .sheet-dates { font-size:15px; color:var(--text-muted); margin-bottom:4px; }
+  .sheet-prof { font-family:'Cormorant Garamond',serif; font-size:17px; font-style:italic; color:var(--gold-dim); margin-bottom:16px; }
+  .sheet-divider { border:none; border-top:1px solid var(--border); margin:0 0 16px; }
+  .sheet-desc { font-size:15px; color:var(--text-muted); line-height:1.75; margin-bottom:22px; }
+  .section-label { font-size:11px; font-weight:500; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); margin-bottom:10px; }
+
+  .gps-card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px; display:flex; align-items:center; gap:13px; margin-bottom:14px; }
+  .gps-icon-wrap { width:38px; height:38px; background:rgba(200,169,110,.10); border-radius:11px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+  .coord-val { font-size:14px; color:var(--text); font-family:'Courier New',monospace; line-height:1.6; }
+  .coord-sub { font-size:12px; color:var(--text-faint); margin-top:3px; }
+
+  .btn-primary { width:100%; background:var(--gold); color:#141410; border:none; border-radius:14px; padding:15px; font-family:'Jost',sans-serif; font-size:15px; font-weight:500; cursor:pointer; margin-bottom:10px; transition:opacity .2s; }
+  .btn-primary:active { opacity:.82; }
+  .btn-secondary { width:100%; background:transparent; color:var(--text-muted); border:1px solid var(--border-strong); border-radius:14px; padding:13px; font-family:'Jost',sans-serif; font-size:15px; font-weight:400; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; transition:background .15s; margin-bottom:10px; }
+  .btn-secondary:active { background:var(--card); }
+  .btn-danger { width:100%; background:var(--danger-bg); color:var(--danger); border:1px solid var(--danger); border-radius:14px; padding:13px; font-family:'Jost',sans-serif; font-size:15px; font-weight:400; cursor:pointer; transition:background .15s; }
+  .btn-danger:active { background:rgba(208,90,90,.2); }
+
+  /* Form Sheet */
+  .form-sheet { position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-radius:22px 22px 0 0; border-top:1px solid var(--border-strong); max-height:95dvh; overflow-y:auto; -webkit-overflow-scrolling:touch; z-index:400; transform:translateY(100%); transition:transform .38s cubic-bezier(.32,.72,0,1); padding-bottom:calc(var(--sb) + 24px); }
+  .form-sheet.on { transform:translateY(0); }
+  .form-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:350; }
+  .form-overlay.on { display:block; }
+
+  .form-header { display:flex; align-items:center; justify-content:space-between; padding:18px 20px 14px; border-bottom:1px solid var(--border); }
+  .form-title { font-family:'Cormorant Garamond',serif; font-size:22px; font-weight:400; color:var(--gold); }
+  .form-close { background:none; border:none; color:var(--text-faint); font-size:22px; cursor:pointer; padding:4px; line-height:1; }
+
+  .form-body { padding:20px; display:flex; flex-direction:column; gap:18px; }
+  .field-group { display:flex; flex-direction:column; gap:6px; }
+  .field-label { font-size:11px; font-weight:500; letter-spacing:.09em; text-transform:uppercase; color:var(--text-faint); }
+  .field-label span { color:var(--danger); margin-left:2px; }
+  .field-input, .field-select, .field-textarea { background:var(--card); border:1px solid var(--border-strong); border-radius:12px; padding:11px 14px; color:var(--text); font-family:'Jost',sans-serif; font-size:16px; outline:none; -webkit-appearance:none; appearance:none; transition:border-color .2s; }
+  .field-input::placeholder, .field-textarea::placeholder { color:var(--text-faint); }
+  .field-input:focus, .field-select:focus, .field-textarea:focus { border-color:var(--gold); }
+  .field-select { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8175' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 14px center; background-size:16px; padding-right:40px; }
+  .field-select option { background:var(--card); color:var(--text); }
+  .field-textarea { resize:vertical; min-height:110px; line-height:1.6; }
+  .fields-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .photo-preview { width:100%; height:120px; border-radius:12px; object-fit:cover; display:none; margin-top:8px; }
+  .photo-preview.loaded { display:block; }
+  .map-pick-hint { font-size:12px; color:var(--gold-dim); background:rgba(200,169,110,.08); border:1px solid var(--border); border-radius:10px; padding:10px 13px; line-height:1.6; }
+  .form-save { width:100%; background:var(--gold); color:#141410; border:none; border-radius:14px; padding:16px; font-family:'Jost',sans-serif; font-size:16px; font-weight:500; cursor:pointer; margin-top:4px; transition:opacity .2s; }
+  .form-save:active { opacity:.82; }
+
+
+  /* ── Settings sheet ── */
+  .settings-btn { background:none; border:1px solid var(--border-strong); border-radius:10px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text-muted); transition:all .2s; flex-shrink:0; }
+  .settings-btn:active { background:var(--card); }
+  .settings-sheet { position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-radius:22px 22px 0 0; border-top:1px solid var(--border-strong); max-height:92dvh; overflow-y:auto; -webkit-overflow-scrolling:touch; z-index:500; transform:translateY(100%); transition:transform .38s cubic-bezier(.32,.72,0,1); padding-bottom:calc(var(--sb) + 28px); }
+  .settings-sheet.on { transform:translateY(0); }
+  .settings-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:480; backdrop-filter:blur(3px); }
+  .settings-overlay.on { display:block; }
+  .settings-header { display:flex; align-items:center; justify-content:space-between; padding:18px 20px 16px; border-bottom:1px solid var(--border); }
+  .settings-title { font-family:'Cormorant Garamond',serif; font-size:24px; font-weight:300; color:var(--gold); }
+  .settings-close { background:none; border:none; color:var(--text-faint); font-size:24px; cursor:pointer; padding:4px; line-height:1; }
+  .settings-body { padding:20px; display:flex; flex-direction:column; gap:24px; }
+  .settings-section-title { font-size:11px; font-weight:500; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); margin-bottom:12px; }
+  .settings-row { display:flex; align-items:center; justify-content:space-between; gap:12px; background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px 16px; }
+  .settings-row-info { flex:1; min-width:0; }
+  .settings-row-label { font-size:15px; color:var(--text); font-weight:400; margin-bottom:2px; }
+  .settings-row-sub { font-size:12px; color:var(--text-faint); line-height:1.4; }
+  .settings-action-btn { background:var(--card-hover); border:1px solid var(--border-strong); border-radius:10px; padding:8px 16px; font-family:'Jost',sans-serif; font-size:13px; font-weight:500; color:var(--text-muted); cursor:pointer; white-space:nowrap; flex-shrink:0; transition:all .15s; }
+  .settings-action-btn:active { background:var(--gold); color:#141410; border-color:var(--gold); }
+  .settings-action-btn.primary { background:var(--gold); color:#141410; border-color:var(--gold); }
+  .settings-action-btn.primary:active { opacity:.8; }
+  .settings-action-btn.danger-btn { color:var(--danger); border-color:var(--danger); background:var(--danger-bg); }
+
+  /* About section */
+  .about-logo { font-family:'Cormorant Garamond',serif; font-size:52px; font-weight:300; color:var(--gold); text-align:center; line-height:1; margin-bottom:4px; }
+  .about-logo em { font-style:italic; }
+  .about-tagline { font-size:12px; color:var(--text-faint); text-align:center; letter-spacing:.1em; text-transform:uppercase; margin-bottom:18px; }
+  .about-card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; }
+  .about-card p { font-size:14px; color:var(--text-muted); line-height:1.75; }
+  .about-card p + p { margin-top:10px; }
+  .about-kv { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:14px; }
+  .about-kv:last-child { border-bottom:none; padding-bottom:0; }
+  .about-kv-key { color:var(--text-faint); }
+  .about-kv-val { color:var(--text); font-weight:500; }
+
+  /* Import progress */
+  .import-progress { display:none; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-top:10px; }
+  .import-progress.on { display:block; }
+  .import-bar-wrap { height:4px; background:var(--surface); border-radius:2px; margin:8px 0; overflow:hidden; }
+  .import-bar-fill { height:100%; background:var(--gold); border-radius:2px; width:0%; transition:width .3s; }
+  .import-log { font-size:12px; color:var(--text-faint); line-height:1.6; max-height:100px; overflow-y:auto; }
+
+  /* Toast */
+  .toast { position:fixed; bottom:calc(var(--nav-h) + var(--sb) + 16px); left:50%; transform:translateX(-50%) translateY(20px); background:var(--card); border:1px solid var(--border-strong); border-radius:20px; padding:9px 18px; font-size:13px; color:var(--text-muted); opacity:0; transition:all .3s; pointer-events:none; z-index:1000; white-space:nowrap; }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* ── Parcours view ── */
+  .sub-tabs { display:flex; background:var(--bg); border-bottom:1px solid var(--border); flex-shrink:0; }
+  .sub-tab { flex:1; padding:12px 8px; text-align:center; font-size:13px; font-weight:500; color:var(--text-faint); cursor:pointer; border-bottom:2px solid transparent; transition:all .2s; }
+  .sub-tab.active { color:var(--gold); border-bottom-color:var(--gold); }
+
+  .route-stats-bar { display:flex; gap:0; background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0; }
+  .route-stat { flex:1; text-align:center; padding:10px 4px; border-right:1px solid var(--border); }
+  .route-stat:last-child { border-right:none; }
+  .route-stat-val { font-size:18px; font-weight:500; color:var(--gold); font-family:'Cormorant Garamond',serif; line-height:1; }
+  .route-stat-lbl { font-size:10px; color:var(--text-faint); letter-spacing:.07em; text-transform:uppercase; margin-top:2px; font-weight:500; }
+
+  /* Selection cards (in parcours choose tab) */
+  .sel-card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:11px 12px 11px 14px; margin-bottom:8px; display:flex; align-items:center; gap:12px; cursor:pointer; transition:all .15s; position:relative; overflow:hidden; }
+  .sel-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; }
+  .sel-card.pere-lachaise::before { background:var(--pl); }
+  .sel-card.montparnasse::before  { background:var(--mp); }
+  .sel-card.selected { border-color:var(--gold); background:rgba(200,169,110,.06); }
+  .sel-check { width:26px; height:26px; border-radius:50%; border:2px solid var(--border-strong); flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:all .15s; background:transparent; }
+  .sel-card.selected .sel-check { background:var(--gold); border-color:var(--gold); color:#141410; font-size:14px; }
+  .sel-info { flex:1; min-width:0; }
+  .sel-name { font-family:'Cormorant Garamond',serif; font-size:18px; font-weight:400; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.2; }
+  .sel-meta { font-size:12px; color:var(--text-faint); margin-top:2px; }
+  .sel-num { width:24px; height:24px; border-radius:50%; background:var(--gold); color:#141410; font-size:12px; font-weight:700; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+
+  /* Route list (itinerary tab) */
+  .route-step { display:flex; gap:13px; align-items:flex-start; margin-bottom:0; }
+  .route-step-connector { display:flex; flex-direction:column; align-items:center; flex-shrink:0; }
+  .route-step-num { width:32px; height:32px; border-radius:50%; background:var(--gold); color:#141410; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .route-step-line { width:2px; flex:1; min-height:20px; background:var(--border-strong); margin:4px 0; }
+  .route-step-body { flex:1; padding-bottom:16px; min-width:0; }
+  .route-step-name { font-family:'Cormorant Garamond',serif; font-size:19px; font-weight:400; line-height:1.1; margin-bottom:2px; }
+  .route-step-sub { font-size:12px; color:var(--text-faint); }
+  .route-step-dist { font-size:11px; color:var(--gold-dim); font-weight:500; margin-top:3px; }
+
+  /* Route map container */
+  #route-map { width:100%; flex:1; min-height:0; }
+
+  /* Route CTA */
+  .route-cta { padding:14px 16px; background:var(--bg); border-top:1px solid var(--border); flex-shrink:0; padding-bottom:calc(var(--nav-h) + var(--sb) + 14px); }
+  .route-cta-btn { width:100%; background:var(--gold); color:#141410; border:none; border-radius:14px; padding:15px; font-family:'Jost',sans-serif; font-size:15px; font-weight:500; cursor:pointer; transition:opacity .2s; }
+  .route-cta-btn:active { opacity:.82; }
+  .route-cta-btn:disabled { opacity:.35; cursor:default; }
+
+  /* Share button in sheet */
+  .share-btn { position:absolute; top:18px; right:16px; width:34px; height:34px; border-radius:50%; background:rgba(200,169,110,.12); border:1px solid var(--border-strong); color:var(--gold); cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:10; }
+  .sheet-handle-row { position:relative; display:flex; justify-content:center; align-items:center; padding:16px 0 8px; min-height:48px; cursor:grab; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Header -->
+  <div class="app-header" id="app-header">
+    <div class="header-top">
+      <h1 class="app-title">Cimetières <em>Célèbres</em></h1>
+      <div class="header-right">
+        <button id="lang-toggle" onclick="toggleLang()" style="background:none;border:1px solid var(--border-strong);border-radius:10px;padding:4px 8px;font-size:18px;cursor:pointer;transition:all .2s;line-height:1;">🇬🇧</button>
+        <button class="settings-btn" onclick="openSettings()" title="Paramètres">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <button class="edit-toggle" id="edit-toggle" onclick="toggleEditMode()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Éditer
+        </button>
+      </div>
+    </div>
+    <div class="search-wrap">
+      <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="search" class="search-input" id="search-input" placeholder="Nom, profession, division…" autocomplete="off" autocorrect="off">
+    </div>
+    <div class="filters">
+      <button class="chip active" data-filter="all" data-i18n="all">Tous</button>
+      <button class="chip pl" data-filter="pere-lachaise">Père-Lachaise</button>
+      <button class="chip mp" data-filter="montparnasse">Montparnasse</button>
+    </div>
+  </div>
+
+  <!-- Vue Liste -->
+  <div class="view" id="view-list">
+    <div class="list-scroll">
+      <p class="count-line" id="list-count"></p>
+      <div id="list-container"></div>
+      <div class="list-fab-area">
+        <button class="list-fab" onclick="openAddForm()"><span data-i18n="add_grave">+ Ajouter une tombe</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vue Carte -->
+  <div class="view" id="view-map" style="position:relative;">
+    <div id="map"></div>
+    <!-- Filtre sur la carte -->
+    <div style="position:absolute;top:calc(var(--st)+12px);left:50%;transform:translateX(-50%);z-index:500;display:flex;gap:8px;pointer-events:all;">
+      <button class="map-chip active" data-filter="all" onclick="setMapFilter(this,'all')">Tous</button>
+      <button class="map-chip pl" data-filter="pere-lachaise" onclick="setMapFilter(this,'pere-lachaise')">Père-Lachaise</button>
+      <button class="map-chip mp" data-filter="montparnasse" onclick="setMapFilter(this,'montparnasse')">Montparnasse</button>
+    </div>
+    <div class="map-legend">
+      <div class="legend-row"><div class="legend-dot" style="background:var(--pl)"></div>Père-Lachaise</div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--mp)"></div>Montparnasse</div>
+    </div>
+    <button class="map-fab" id="map-fab" onclick="openAddForm()">+</button>
+  </div>
+
+  <!-- Vue Favoris -->
+  <div class="view" id="view-favorites">
+    <div class="list-scroll">
+      <p class="count-line" id="fav-count"></p>
+      <div id="fav-container"></div>
+    </div>
+  </div>
+
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-view="list">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      <span class="nav-label" data-i18n="nav_list">Liste</span>
+    </button>
+    <button class="nav-btn" data-view="map">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+      <span class="nav-label" data-i18n="nav_map">Carte</span>
+    </button>
+    <button class="nav-btn" data-view="favorites">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5z"/></svg>
+      <span class="nav-label" data-i18n="nav_favs">Favoris</span>
+    </button>
+    <button class="nav-btn" data-view="route">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M6 16V9a6 6 0 0 1 6-6h.5"/><path d="M18 8v7a6 6 0 0 1-6 6H12"/></svg>
+      <span class="nav-label" data-i18n="nav_route">Parcours</span>
+    </button>
+  </nav>
+</div>
+
+<!-- ── Parcours view (outside #app so it overlays full screen) ── -->
+<div class="view" id="view-route" style="position:fixed;inset:0;z-index:50;background:var(--bg);display:none;flex-direction:column;">
+  <!-- Parcours header -->
+  <div style="padding:calc(var(--st) + 14px) 16px 0; background:var(--bg); border-bottom:1px solid var(--border); flex-shrink:0;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <h2 style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:300;color:var(--gold);">${lang==='fr'?'Mon':'My'} <em style="font-style:italic;font-weight:400;">${lang==='fr'?'Parcours':'Route'}</em></h2>
+      <button onclick="clearRoute()" style="background:none;border:1px solid var(--border-strong);border-radius:10px;padding:4px 12px;font-family:'Jost',sans-serif;font-size:12px;color:var(--text-faint);cursor:pointer;"><span data-i18n="clear">Effacer</span></button>
+    </div>
+    <div class="sub-tabs">
+      <div class="sub-tab active" id="subtab-choose" onclick="switchSubTab('choose')"><span data-i18n="choose_graves">Choisir les tombes</span></div>
+      <div class="sub-tab" id="subtab-itinerary" onclick="switchSubTab('itinerary')"><span data-i18n="itinerary">Itinéraire</span></div>
+    </div>
+  </div>
+
+  <div class="route-stats-bar" id="route-stats-bar">
+    <div class="route-stat"><div class="route-stat-val" id="stat-count">0</div><div class="route-stat-lbl" id="stat-lbl-graves">tombes</div></div>
+    <div class="route-stat"><div class="route-stat-val" id="stat-dist">—</div><div class="route-stat-lbl" id="stat-lbl-km">km à pied</div></div>
+    <div class="route-stat"><div class="route-stat-val" id="stat-time">—</div><div class="route-stat-lbl" id="stat-lbl-min">min estimées</div></div>
+  </div>
+
+  <!-- Sub-view: Choose -->
+  <div id="subview-choose" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 16px;padding-bottom:calc(var(--nav-h) + var(--sb) + 20px);">
+    <p style="font-size:11px;color:var(--text-faint);letter-spacing:.09em;text-transform:uppercase;font-weight:500;margin-bottom:12px;">Sélectionnez les tombes à visiter</p>
+    <div id="sel-list-container"></div>
+  </div>
+
+  <!-- Sub-view: Itinerary list -->
+  <div id="subview-itinerary" style="display:none;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px 0;">
+    <div id="route-steps-container"></div>
+  </div>
+
+  <!-- Sub-view: Route map -->
+  <div id="subview-map" style="display:none;flex:1;min-height:0;">
+    <div id="route-map"></div>
+  </div>
+
+  <!-- Itinerary sub-tabs -->
+  <div id="itinerary-tabs" style="display:none;flex-shrink:0;display:none;border-top:1px solid var(--border);background:var(--surface);">
+    <div style="display:flex;">
+      <div class="sub-tab active" id="it-subtab-list" onclick="switchItTab('list')" style="border-top:none;">Liste</div>
+      <div class="sub-tab" id="it-subtab-map"  onclick="switchItTab('map')"  style="border-top:none;">Carte</div>
+    </div>
+  </div>
+
+  <div class="route-cta">
+    <button class="route-cta-btn" id="route-cta-btn" onclick="launchInMaps()" disabled><span data-i18n="start_maps">Démarrer dans Plans →</span></button>
+  </div>
+</div>
+
+<!-- Detail Sheet -->
+<div class="overlay" id="overlay"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-handle-row">
+    <div class="sheet-handle"></div>
+    <button class="share-btn" id="sheet-share-btn" title="Partager" onclick="shareCurrentGrave()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+    </button>
+  </div>
+  <div id="sheet-inner"></div>
+</div>
+
+<!-- Form Sheet -->
+<div class="form-overlay" id="form-overlay"></div>
+<div class="form-sheet" id="form-sheet">
+  <div class="form-header">
+    <span class="form-title" id="form-title">Nouvelle tombe</span>
+    <button class="form-close" onclick="closeAddForm()">✕</button>
+  </div>
+  <div class="form-body">
+    <div class="field-group">
+      <label class="field-label">Cimetière <span>*</span></label>
+      <select class="field-select" id="f-cemetery">
+        <option value="pere-lachaise">Père-Lachaise</option>
+        <option value="montparnasse">Montparnasse</option>
+      </select>
+    </div>
+    <div class="field-group">
+      <label class="field-label">Nom complet <span>*</span></label>
+      <input type="text" class="field-input" id="f-name" placeholder="ex. Victor Hugo">
+    </div>
+    <div class="fields-row">
+      <div class="field-group">
+        <label class="field-label">Naissance <span>*</span></label>
+        <input type="number" class="field-input" id="f-born" placeholder="1802" min="1600" max="2010">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Décès <span>*</span></label>
+        <input type="number" class="field-input" id="f-died" placeholder="1885" min="1600" max="2030">
+      </div>
+    </div>
+    <div class="field-group">
+      <label class="field-label">Profession</label>
+      <input type="text" class="field-input" id="f-profession" placeholder="ex. Écrivain, poète">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Division / Section <span>*</span></label>
+      <input type="text" class="field-input" id="f-section" placeholder="ex. Division 27">
+    </div>
+    <div class="fields-row">
+      <div class="field-group">
+        <label class="field-label">Latitude <span>*</span></label>
+        <input type="number" class="field-input" id="f-lat" placeholder="48.861" step="0.00001">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Longitude <span>*</span></label>
+        <input type="number" class="field-input" id="f-lng" placeholder="2.395" step="0.00001">
+      </div>
+    </div>
+    <div class="map-pick-hint">
+      ${t('gps_hint')}
+    </div>
+    <div class="field-group">
+      <label class="field-label">Photo portrait — URL Wikipedia</label>
+      <input type="url" class="field-input" id="f-photo" placeholder="https://upload.wikimedia.org/…" oninput="previewPhoto('f-photo','prev-photo')">
+      <img class="photo-preview" id="prev-photo" alt="Aperçu portrait">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Photo de la tombe — URL Wikipedia</label>
+      <input type="url" class="field-input" id="f-tomb" placeholder="https://upload.wikimedia.org/…" oninput="previewPhoto('f-tomb','prev-tomb')">
+      <img class="photo-preview" id="prev-tomb" alt="Aperçu tombe">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Biographie / Description</label>
+      <textarea class="field-textarea" id="f-desc" placeholder="Courte biographie, anecdotes, œuvres majeures…"></textarea>
+    </div>
+    <div id="form-reset-row" style="display:none;">
+      <button id="form-reset-btn" type="button" style="width:100%;background:transparent;color:var(--text-faint);border:1px solid var(--border);border-radius:12px;padding:11px;font-family:'Jost',sans-serif;font-size:14px;cursor:pointer;">
+        ↩ Restaurer les données d'origine
+      </button>
+    </div>
+    <button class="form-save" onclick="saveGrave()">Enregistrer</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+
+<!-- Settings overlay + sheet -->
+<div class="settings-overlay" id="settings-overlay"></div>
+<div class="settings-sheet" id="settings-sheet">
+  <div class="settings-header">
+    <span class="settings-title" data-i18n="settings">Paramètres</span>
+    <button class="settings-close" onclick="closeSettings()">✕</button>
+  </div>
+  <div class="settings-body">
+    <div id="settings-body-dynamic"></div>
+  </div>
+</div>
+
+<!-- Hidden file input for Excel import -->
+
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+
+/* ════════════════════════════════════════════════════════════
+   INTERNATIONALISATION — FR / EN
+   ════════════════════════════════════════════════════════════ */
+let lang = localStorage.getItem('cp_lang') || 'fr';
+
+const T = {
+  fr: {
+    nav_list:'Liste', nav_map:'Carte', nav_favs:'Favoris', nav_route:'Parcours',
+    search_ph:'Nom, profession, division\u2026',
+    all:'Tous',
+    grave_count: n => `${n} personnage${n!==1?'s':''}`,
+    fav_count:   n => `${n} favori${n!==1?'s':''}`,
+    empty_list:'Aucun r\u00e9sultat pour cette recherche',
+    empty_favs:'Appuyez sur \u2606 pour ajouter des personnages \u00e0 vos favoris',
+    add_grave:'+ Ajouter une tombe',
+    my_route:'Mon', my_route2:'Parcours',
+    choose_graves:'Choisir les tombes', itinerary:'It\u00ednaire',
+    stat_graves:'tombes', stat_km:'km \u00e0 pied', stat_min:'min estim\u00e9es',
+    start_maps:'D\u00e9marrer dans Plans \u2192',
+    clear:'Effacer',
+    sel_label:'S\u00e9lectionnez les tombes \u00e0 visiter',
+    route_empty:"S\u00e9lectionnez des tombes dans l'onglet \u00ab\u00a0Choisir\u00a0\u00bb pour construire votre parcours",
+    step_walk: km => `\u2193 ${km} \u00e0 pied jusqu'\u00e0 l'\u00e9tape suivante`,
+    pl:'P\u00e8re-Lachaise', mp:'Montparnasse',
+    open_maps:'\ud83d\udccd Ouvrir dans Plans',
+    add_fav:'Ajouter aux favoris', remove_fav:'Retirer des favoris',
+    add_route:'Ajouter au parcours', remove_route:'Retirer du parcours',
+    edit_sheet:'\u270f\ufe0f Modifier cette fiche',
+    delete_grave:'Supprimer cette tombe',
+    gps_coords:'Coordonn\u00e9es GPS',
+    photo_portrait:'Portrait', photo_tomb:'Tombe',
+    form_new:'Nouvelle tombe', form_edit:'Modifier la tombe',
+    form_edit_base: name => 'Modifier \u00b7 ' + name,
+    gps_hint:'<strong style="color:var(--gold)">Trouver les GPS\u00a0:</strong> appui long sur Google Maps ou Apple Maps \u2192 coordonn\u00e9es en bas.',
+    toast_fav_add:'Ajout\u00e9 aux favoris \u2605',
+    toast_fav_remove:'Retir\u00e9 des favoris',
+    toast_grave_add:'Tombe ajout\u00e9e \u2713',
+    toast_grave_edit:'Tombe modifi\u00e9e \u2713',
+    toast_grave_del:'Tombe supprim\u00e9e',
+    toast_restored:'Tombe restaur\u00e9e \u2713',
+    toast_data_reset:'Donn\u00e9es r\u00e9initialis\u00e9es \u2713',
+    toast_exported:'\u2713 Enregistr\u00e9 dans Fichiers \u2192 Cimeti\u00e8res C\u00e9l\u00e8bres',
+    toast_shared:'Fiche copi\u00e9e \u2713',
+    confirm_delete:'Supprimer cette tombe\u00a0?',
+    confirm_reset:"Supprimer TOUTES les tombes ajout\u00e9es et TOUTES les modifications\u00a0?\nLes donn\u00e9es d'origine seront restaur\u00e9es.",
+    confirm_route:'Effacer le parcours\u00a0?',
+    alert_name:'Le nom est requis.',
+    alert_dates:'Les dates sont requises.',
+    alert_section:'La division/section est requise.',
+    alert_gps:'Les coordonn\u00e9es GPS sont requises.',
+    settings:'Param\u00e8tres',
+    s_about:'\u00c0 propos',
+    s_import_export:'Import \u00b7 Export Excel',
+    s_export_label:'Exporter toutes les tombes',
+    s_export_sub:'Fichier .xlsx enregistr\u00e9 dans Fichiers \u2192 Cimeti\u00e8res C\u00e9l\u00e8bres',
+    s_export_btn:'Exporter',
+    s_import_label:'Importer depuis Excel',
+    s_import_sub:'Importe un .xlsx export\u00e9. Les tombes existantes sont mises \u00e0 jour.',
+    s_import_btn:'Importer',
+    s_template_label:'T\u00e9l\u00e9charger le mod\u00e8le vide',
+    s_template_sub:'Fichier .xlsx avec les colonnes correctes',
+    s_template_btn:'Mod\u00e8le',
+    s_data:'Gestion des donn\u00e9es',
+    s_reset_label:'R\u00e9initialiser les modifications',
+    s_reset_sub:'Supprime les tombes ajout\u00e9es et annule les modifications',
+    s_reset_btn:'R\u00e9initialiser',
+    about_desc1:"Application de d\u00e9couverte des tombes de personnages c\u00e9l\u00e8bres dans les deux grands cimeti\u00e8res parisiens. Cartes interactives, biographies, coordonn\u00e9es GPS et itin\u00e9raires personnalis\u00e9s.",
+    about_desc2:"Donn\u00e9es encyclop\u00e9diques issues de Wikipedia Commons. Photos sous licence Creative Commons.",
+    about_dev:'D\u00e9veloppeur', about_ver:'Version', about_base:'Tombes int\u00e9gr\u00e9es',
+    about_custom:'Tombes ajout\u00e9es', about_edited:'Tombes modifi\u00e9es',
+    about_cem:'Cimeti\u00e8res', about_platform:'Plateforme', about_map:'Cartographie',
+    copyright:'\u00a9 2026 Michel Garlandat\n\u00c9labor\u00e9 avec Anthropic Claude',
+    credits_title:'Cr\u00e9dits',
+    credits_body:'Photos et biographies\u00a0: <span style="color:var(--gold-dim)">Wikip\u00e9dia</span>, licence Creative Commons CC BY-SA.<br>Cartographie\u00a0: <span style="color:var(--gold-dim)">OpenStreetMap</span> / Carto Dark Matter.<br>Librairies\u00a0: Leaflet 1.9, SheetJS 0.18.',
+    import_proc:    n => `${n} lignes trouv\u00e9es\u2026`,
+    import_done:    (a,u,s,e) => `Import termin\u00e9\u00a0: ${a} ajout\u00e9es, ${u} mises \u00e0 jour, ${s} ignor\u00e9es${e?', '+e+' erreurs':''}`,
+    import_reading: 'Lecture du fichier\u2026',
+    import_parsing: 'Analyse des donn\u00e9es\u2026',
+    import_error:   'Erreur\u00a0: ',
+  },
+  en: {
+    nav_list:'List', nav_map:'Map', nav_favs:'Favorites', nav_route:'Route',
+    search_ph:'Name, profession, division\u2026',
+    all:'All',
+    grave_count: n => `${n} person${n!==1?'s':''}`,
+    fav_count:   n => `${n} favorite${n!==1?'s':''}`,
+    empty_list:'No results for this search',
+    empty_favs:'Tap \u2606 to add people to your favorites',
+    add_grave:'+ Add a grave',
+    my_route:'My', my_route2:'Route',
+    choose_graves:'Choose graves', itinerary:'Itinerary',
+    stat_graves:'graves', stat_km:'km walking', stat_min:'est. minutes',
+    start_maps:'Start in Maps \u2192',
+    clear:'Clear',
+    sel_label:'Select graves to visit',
+    route_empty:'Select graves in the "Choose" tab to build your route',
+    step_walk: km => `\u2193 ${km} walking to next stop`,
+    pl:'P\u00e8re-Lachaise', mp:'Montparnasse',
+    open_maps:'\ud83d\udccd Open in Maps',
+    add_fav:'Add to favorites', remove_fav:'Remove from favorites',
+    add_route:'Add to route', remove_route:'Remove from route',
+    edit_sheet:'\u270f\ufe0f Edit this record',
+    delete_grave:'Delete this grave',
+    gps_coords:'GPS Coordinates',
+    photo_portrait:'Portrait', photo_tomb:'Grave',
+    form_new:'New grave', form_edit:'Edit grave',
+    form_edit_base: name => 'Edit \u00b7 ' + name,
+    gps_hint:'<strong style="color:var(--gold)">Find GPS:</strong> long press on Google Maps or Apple Maps \u2192 coordinates appear at the bottom.',
+    toast_fav_add:'Added to favorites \u2605',
+    toast_fav_remove:'Removed from favorites',
+    toast_grave_add:'Grave added \u2713',
+    toast_grave_edit:'Grave updated \u2713',
+    toast_grave_del:'Grave deleted',
+    toast_restored:'Grave restored \u2713',
+    toast_data_reset:'Data reset \u2713',
+    toast_exported:'\u2713 Saved in Files \u2192 Cimeti\u00e8res C\u00e9l\u00e8bres',
+    toast_shared:'Card copied \u2713',
+    confirm_delete:'Delete this grave?',
+    confirm_reset:'Delete ALL added graves and ALL modifications?\nOriginal data will be restored.',
+    confirm_route:'Clear the route?',
+    alert_name:'Name is required.',
+    alert_dates:'Dates are required.',
+    alert_section:'Division/section is required.',
+    alert_gps:'GPS coordinates are required.',
+    settings:'Settings',
+    s_about:'About',
+    s_import_export:'Import \u00b7 Export Excel',
+    s_export_label:'Export all graves',
+    s_export_sub:'.xlsx file saved in Files \u2192 Cimeti\u00e8res C\u00e9l\u00e8bres',
+    s_export_btn:'Export',
+    s_import_label:'Import from Excel',
+    s_import_sub:'Import a previously exported .xlsx. Existing graves are updated.',
+    s_import_btn:'Import',
+    s_template_label:'Download blank template',
+    s_template_sub:'.xlsx file with the correct columns',
+    s_template_btn:'Template',
+    s_data:'Data management',
+    s_reset_label:'Reset all changes',
+    s_reset_sub:'Deletes added graves and reverts all modifications',
+    s_reset_btn:'Reset',
+    about_desc1:"An app to discover the graves of famous people in Paris's two great cemeteries. Interactive maps, biographies, GPS coordinates and personalised itineraries.",
+    about_desc2:"Encyclopedic data from Wikipedia Commons. Photos under Creative Commons licence.",
+    about_dev:'Developer', about_ver:'Version', about_base:'Built-in graves',
+    about_custom:'Added graves', about_edited:'Modified graves',
+    about_cem:'Cemeteries', about_platform:'Platform', about_map:'Mapping',
+    copyright:'\u00a9 2026 Michel Garlandat\nBuilt with Anthropic Claude',
+    credits_title:'Credits',
+    credits_body:'Photos and biographies: <span style="color:var(--gold-dim)">Wikipedia</span>, Creative Commons CC BY-SA.<br>Mapping: <span style="color:var(--gold-dim)">OpenStreetMap</span> / Carto Dark Matter.<br>Libraries: Leaflet 1.9, SheetJS 0.18.',
+    import_proc:    n => `${n} rows found\u2026`,
+    import_done:    (a,u,s,e) => `Import complete: ${a} added, ${u} updated, ${s} skipped${e?', '+e+' errors':''}`,
+    import_reading: 'Reading file\u2026',
+    import_parsing: 'Parsing data\u2026',
+    import_error:   'Error: ',
+  }
+};
+
+function t(key, ...args) {
+  const v = T[lang][key] || T['fr'][key] || key;
+  return typeof v === 'function' ? v(...args) : v;
+}
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.title = lang === 'en' ? 'Famous Cemeteries' : 'Cimeti\u00e8res C\u00e9l\u00e8bres';
+  const btn = document.getElementById('lang-toggle');
+  if(btn) btn.textContent = lang === 'fr' ? '🇬🇧' : '🇫🇷';
+  // Nav labels
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const v = t(el.dataset.i18n);
+    if(v) el.textContent = v;
+  });
+  // Search placeholder
+  const si = document.getElementById('search-input');
+  if(si) si.placeholder = t('search_ph');
+  // Route stat labels
+  ['graves','km','min'].forEach(k => {
+    const el = document.getElementById('stat-lbl-'+k);
+    if(el) el.textContent = t('stat_'+k);
+  });
+  // Refresh current view
+  updateChipCounts();
+  renderList();
+  if(activeView === 'favorites') renderFavs();
+  if(activeView === 'route')     renderRouteView();
+}
+
+function toggleLang() {
+  lang = lang === 'fr' ? 'en' : 'fr';
+  localStorage.setItem('cp_lang', lang);
+  applyLang();
+}
+
+function renderSettingsContent() {
+  const body = document.getElementById('settings-body-dynamic');
+  if(!body) return;
+  body.innerHTML = `
+    <div>
+      <p class="settings-section-title">${t('s_about')}</p>
+      <div class="about-logo">Cimeti\u00e8res <em>C\u00e9l\u00e8bres</em></div>
+      <div class="about-tagline">Paris \u00b7 P\u00e8re-Lachaise & Montparnasse</div>
+      <div class="about-card">
+        <p>${t('about_desc1')}</p>
+        <p>${t('about_desc2')}</p>
+        <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">
+          <div class="about-kv"><span class="about-kv-key">${t('about_ver')}</span><span class="about-kv-val">1.0</span></div>
+          <div class="about-kv"><span class="about-kv-key">${t('about_base')}</span><span class="about-kv-val">22</span></div>
+          <div class="about-kv"><span class="about-kv-key">${t('about_custom')}</span><span class="about-kv-val">${customs.length}</span></div>
+          <div class="about-kv"><span class="about-kv-key">${t('about_edited')}</span><span class="about-kv-val">${Object.keys(overrides).length}</span></div>
+          <div class="about-kv"><span class="about-kv-key">${t('about_cem')}</span><span class="about-kv-val">P\u00e8re-Lachaise \u00b7 Montparnasse</span></div>
+          <div class="about-kv"><span class="about-kv-key">${t('about_dev')}</span><span class="about-kv-val">Michel Garlandat</span></div>
+          <div class="about-kv"><span class="about-kv-key">${t('about_platform')}</span><span class="about-kv-val">iOS \u00b7 Capacitor 6</span></div>
+          <div class="about-kv"><span class="about-kv-key">${t('about_map')}</span><span class="about-kv-val">Leaflet \u00b7 Carto Dark</span></div>
+        </div>
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);text-align:center;">
+          <div style="font-size:13px;color:var(--text-muted);line-height:1.8;white-space:pre-line;">${t('copyright')}</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--text-faint);line-height:1.7;text-align:left;background:var(--surface);border-radius:10px;padding:10px 12px;">
+            <strong style="color:var(--text-muted);display:block;margin-bottom:4px;">${t('credits_title')}</strong>
+            ${t('credits_body')}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <p class="settings-section-title">${t('s_import_export')}</p>
+      <div class="settings-row" style="margin-bottom:10px;">
+        <div class="settings-row-info">
+          <div class="settings-row-label">${t('s_export_label')}</div>
+          <div class="settings-row-sub">${t('s_export_sub')}</div>
+        </div>
+        <button class="settings-action-btn primary" onclick="exportExcel()">${t('s_export_btn')}</button>
+      </div>
+      <div class="settings-row" style="margin-bottom:10px;">
+        <div class="settings-row-info">
+          <div class="settings-row-label">${t('s_import_label')}</div>
+          <div class="settings-row-sub">${t('s_import_sub')}</div>
+        </div>
+        <button class="settings-action-btn" onclick="document.getElementById('excel-file-input').click()">${t('s_import_btn')}</button>
+        <input type="file" id="excel-file-input" accept=".xlsx,.xls" style="display:none;" onchange="importExcel(this)">
+      </div>
+      <div class="import-progress" id="import-progress">
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:4px;" id="import-status"></div>
+        <div class="import-bar-wrap"><div class="import-bar-fill" id="import-bar"></div></div>
+        <div class="import-log" id="import-log"></div>
+      </div>
+      <div class="settings-row" style="margin-bottom:10px;">
+        <div class="settings-row-info">
+          <div class="settings-row-label">${t('s_template_label')}</div>
+          <div class="settings-row-sub">${t('s_template_sub')}</div>
+        </div>
+        <button class="settings-action-btn" onclick="downloadTemplate()">${t('s_template_btn')}</button>
+      </div>
+    </div>
+    <div>
+      <p class="settings-section-title">${t('s_data')}</p>
+      <div class="settings-row" style="margin-bottom:10px;">
+        <div class="settings-row-info">
+          <div class="settings-row-label">${lang==='fr'?'Rafraîchir les portraits':'Refresh portraits'}</div>
+          <div class="settings-row-sub">${lang==='fr'?'Recharge les photos depuis Wikipedia':'Reload photos from Wikipedia'}</div>
+        </div>
+        <button class="settings-action-btn" onclick="refreshPortraits()">${lang==='fr'?'Rafraîchir':'Refresh'}</button>
+      </div>
+      <div class="settings-row" style="margin-bottom:10px;">
+        <div class="settings-row-info">
+          <div class="settings-row-label">${t('s_reset_label')}</div>
+          <div class="settings-row-sub">${t('s_reset_sub')}</div>
+        </div>
+        <button class="settings-action-btn danger-btn" onclick="resetAllData()">${t('s_reset_btn')}</button>
+      </div>
+    </div>
+  `.replace(/\$\{'(\w+)'\}/g, (_, k) => t(k));
+}
+/* ═══════════════════════════════════
+   DATA BASE — 22 tombes
+   ═══════════════════════════════════ */
+const GRAVES_BASE = [
+  {id:1,wikiSlug:'Jim_Morrison',cemetery:'pere-lachaise',name:'Jim Morrison',born:1943,died:1971,profession:'Musicien, poète',section:'Division 6',lat:48.86172,lng:2.39581,photo:'',tombPhoto:'',init:'JM',
+   desc:'Chanteur et parolier mythique des Doors, décédé à Paris à 27 ans dans des circonstances mystérieuses. Sa tombe couverte de graffitis et d\'offrandes est l\'une des plus visitées du cimetière, attirant des fans du monde entier.',
+   descEn:'Lead singer and lyricist of The Doors, who died in Paris aged 27 under mysterious circumstances. His grave, covered in graffiti and offerings, is one of the most visited in the cemetery, drawing fans from around the world.'},
+  {id:2,wikiSlug:'Édith_Piaf',cemetery:'pere-lachaise',name:'Édith Piaf',born:1915,died:1963,profession:'Chanteuse',section:'Division 97',lat:48.86068,lng:2.39921,photo:'',tombPhoto:'',init:'ÉP',
+   desc:'La « Môme Piaf », voix inoubliable de la chanson française. Interprète de La Vie en rose et Non, je ne regrette rien, elle incarne à jamais l\'âme populaire de Paris. Ses funérailles rassemblèrent plus de 100 000 personnes.',
+   descEn:'The Little Sparrow, unforgettable voice of French song. Singer of La Vie en rose and Non, je ne regrette rien. Over 100,000 people attended her funeral.'},
+  {id:3,wikiSlug:'Oscar_Wilde',cemetery:'pere-lachaise',name:'Oscar Wilde',born:1854,died:1900,profession:'Écrivain, dramaturge',section:'Division 89',lat:48.86109,lng:2.39418,photo:'',tombPhoto:'',init:'OW',
+   desc:'Auteur irlandais du Portrait de Dorian Gray, mort dans la misère à Paris après son emprisonnement. Sa tombe, ornée d\'un sphinx ailé signé Jacob Epstein, est couverte de baisers de rouge à lèvres laissés par ses admirateurs.',
+   descEn:'Irish author of The Picture of Dorian Gray, who died in poverty in Paris. His tomb, adorned with a winged sphinx by Jacob Epstein, is covered in lipstick kisses left by admirers.'},
+  {id:4,wikiSlug:'Frédéric_Chopin',cemetery:'pere-lachaise',name:'Frédéric Chopin',born:1810,died:1849,profession:'Compositeur, pianiste',section:'Division 11',lat:48.86129,lng:2.39524,photo:'',tombPhoto:'',init:'FC',
+   desc:'Génie du piano romantique, né en Pologne et installé à Paris à 21 ans. Ses nocturnes, préludes et ballades comptent parmi les plus belles pages du répertoire classique. Son cœur fut rapatrié à Varsovie selon ses dernières volontés.',
+   descEn:'Romantic piano genius, born in Poland and settled in Paris at 21. His nocturnes, preludes and ballades rank among the finest pages of classical music. His heart was repatriated to Warsaw per his last wishes.'},
+  {id:5,wikiSlug:'Marcel_Proust',cemetery:'pere-lachaise',name:'Marcel Proust',born:1871,died:1922,profession:'Écrivain',section:'Division 85',lat:48.85963,lng:2.39618,photo:'',tombPhoto:'',init:'MP',
+   desc:'Auteur de À la recherche du temps perdu, sommet de la littérature française. Reclus dans sa chambre tapissée de liège, il consacra ses dernières années à cette fresque mémorielle de la Belle Époque.',
+   descEn:'Author of In Search of Lost Time, the pinnacle of French literature. Secluded in his cork-lined room, he devoted his final years to this sweeping memory-portrait of Belle Époque society.'},
+  {id:6,wikiSlug:'Molière',cemetery:'pere-lachaise',name:'Molière',born:1622,died:1673,profession:'Dramaturge, comédien',section:'Division 25',lat:48.86176,lng:2.39536,photo:'',tombPhoto:'',init:'Mo',
+   desc:'De son vrai nom Jean-Baptiste Poquelin, il est le maître incontesté de la comédie française. Tartuffe, L\'Avare, Le Misanthrope sont joués sur toutes les scènes du monde depuis 350 ans.',
+   descEn:'Born Jean-Baptiste Poquelin, undisputed master of French comedy. Tartuffe, The Miser, The Misanthrope have been staged around the world for 350 years.'},
+  {id:7,wikiSlug:'Honoré_de_Balzac',cemetery:'pere-lachaise',name:'Honoré de Balzac',born:1799,died:1850,profession:'Écrivain',section:'Division 48',lat:48.86064,lng:2.39580,photo:'',tombPhoto:'',init:'HB',
+   desc:'Auteur de La Comédie humaine, cycle de 91 romans dépeignant la société française du XIXe siècle. Il travaillait 16 heures par jour, soutenu par des litres de café.',
+   descEn:'Author of The Human Comedy, 91 novels depicting 19th-century French society. He worked 16 hours a day, fuelled by litres of coffee.'},
+  {id:8,wikiSlug:'Sarah_Bernhardt',cemetery:'pere-lachaise',name:'Sarah Bernhardt',born:1844,died:1923,profession:'Comédienne',section:'Division 44',lat:48.86101,lng:2.39657,photo:'',tombPhoto:'',init:'SBe',
+   desc:'Surnommée « la Divine », elle fut la plus grande actrice de théâtre de son époque, adulée sur les scènes de Paris, Londres et New York. Elle continua à jouer après l\'amputation de sa jambe droite en 1915.',
+   descEn:'Nicknamed the Divine, the greatest stage actress of her era, adored in Paris, London and New York. She continued to perform after her right leg was amputated in 1915.'},
+  {id:9,wikiSlug:'Yves_Montand',cemetery:'pere-lachaise',name:'Yves Montand',born:1921,died:1991,profession:'Chanteur, acteur',section:'Division 44',lat:48.86090,lng:2.39668,photo:'',tombPhoto:'',init:'YM',
+   desc:'Né Ivo Livi en Italie, star de la chanson (Les Feuilles mortes) et du cinéma (Z, Le Salaire de la peur). Compagnon de Simone Signoret pendant 35 ans.',
+   descEn:'Born Ivo Livi in Italy, star of song (Autumn Leaves) and cinema (Z, The Wages of Fear). Simone Signoret\'s companion for 35 years.'},
+  {id:10,wikiSlug:'Simone_Signoret',cemetery:'pere-lachaise',name:'Simone Signoret',born:1921,died:1985,profession:'Actrice',section:'Division 44',lat:48.86094,lng:2.39673,photo:'',tombPhoto:'',init:'SS',
+   desc:'Première actrice française à remporter l\'Oscar du meilleur rôle (1960). Militante engagée, elle partage sa sépulture avec Yves Montand.',
+   descEn:'First French actress to win the Academy Award for Best Actress (1960). She shares her grave with Yves Montand.'},
+  {id:11,wikiSlug:'Guillaume_Apollinaire',cemetery:'pere-lachaise',name:'Guillaume Apollinaire',born:1880,died:1918,profession:'Poète',section:'Division 86',lat:48.86029,lng:2.39560,photo:'',tombPhoto:'',init:'GA',
+   desc:'Poète avant-gardiste, il inventa le mot « surréalisme » et fut l\'ami intime de Picasso. Il mourut des suites de la grippe espagnole, affaibli par une blessure de guerre.',
+   descEn:'Avant-garde poet who coined the word surrealism and was Picasso\'s close friend. He died from Spanish flu, weakened by a war wound.'},
+  {id:12,wikiSlug:'Eugène_Delacroix',cemetery:'pere-lachaise',name:'Eugène Delacroix',born:1798,died:1863,profession:'Peintre',section:'Division 49',lat:48.86048,lng:2.39597,photo:'',tombPhoto:'',init:'ED',
+   desc:'Chef de file du romantisme pictural, auteur de La Liberté guidant le peuple (1830). Sa palette vibrante influença directement les impressionnistes.',
+   descEn:'Leader of French Romantic painting, author of Liberty Leading the People (1830). His vibrant palette directly influenced the Impressionists.'},
+  {id:13,wikiSlug:'Jean-Paul_Sartre',cemetery:'montparnasse',name:'Jean-Paul Sartre',born:1905,died:1980,profession:'Philosophe, écrivain',section:'Division 20',lat:48.84030,lng:2.32638,photo:'',tombPhoto:'',init:'JS',
+   desc:'Figure emblématique de l\'existentialisme, auteur de L\'Être et le Néant et de Huis clos. Il refusa le Prix Nobel 1964. 50 000 personnes assistèrent à ses funérailles.',
+   descEn:'Emblematic figure of existentialism, author of Being and Nothingness and No Exit. He refused the 1964 Nobel Prize. 50,000 people attended his funeral.'},
+  {id:14,wikiSlug:'Simone_de_Beauvoir',cemetery:'montparnasse',name:'Simone de Beauvoir',born:1908,died:1986,profession:'Philosophe, écrivaine',section:'Division 20',lat:48.84033,lng:2.32641,photo:'',tombPhoto:'',init:'SdB',
+   desc:'Philosophe existentialiste et fondatrice du féminisme moderne. Le Deuxième Sexe (1949) reste l\'œuvre fondatrice des études de genre. Elle repose aux côtés de Sartre.',
+   descEn:'Existentialist philosopher and founder of modern feminism. The Second Sex (1949) remains the founding work of gender studies. She rests alongside Sartre.'},
+  {id:15,wikiSlug:'Serge_Gainsbourg',cemetery:'montparnasse',name:'Serge Gainsbourg',born:1928,died:1991,profession:'Chanteur, compositeur',section:'Division 1',lat:48.84013,lng:2.32551,photo:'',tombPhoto:'',init:'SG',
+   desc:'Génie provocateur de la chanson française. De Je t\'aime… moi non plus à La Marseillaise reggae, il a toujours défié les conventions. Sa tombe couverte de tickets de métro est un lieu de pèlerinage.',
+   descEn:'Provocative genius of French song. From Je t\'aime to a reggae Marseillaise, he always defied convention. His grave covered in metro tickets is a place of pilgrimage.'},
+  {id:16,wikiSlug:'Samuel_Beckett',cemetery:'montparnasse',name:'Samuel Beckett',born:1906,died:1989,profession:'Écrivain, dramaturge',section:'Division 12',lat:48.83990,lng:2.32681,photo:'',tombPhoto:'',init:'SBe',
+   desc:'Auteur irlandais d\'expression française, Prix Nobel 1969. En attendant Godot (1953) est la pièce la plus jouée du XXe siècle. Il fut aussi membre de la Résistance française.',
+   descEn:'Irish author writing in French, 1969 Nobel Prize. Waiting for Godot (1953) is the most performed play of the 20th century. He also served in the French Resistance.'},
+  {id:17,wikiSlug:'Charles_Baudelaire',cemetery:'montparnasse',name:'Charles Baudelaire',born:1821,died:1867,profession:'Poète',section:'Division 6',lat:48.83980,lng:2.32581,photo:'',tombPhoto:'',init:'CB',
+   desc:'Auteur des Fleurs du mal (1857), condamné pour « offense à la morale publique ». Baudelaire est le père de la modernité poétique.',
+   descEn:'Author of Les Fleurs du Mal (1857), condemned for offence to public morality. Baudelaire is the father of poetic modernity.'},
+  {id:18,wikiSlug:'Guy_de_Maupassant',cemetery:'montparnasse',name:'Guy de Maupassant',born:1850,died:1893,profession:'Écrivain',section:'Division 26',lat:48.84024,lng:2.32712,photo:'',tombPhoto:'',init:'GM',
+   desc:'Maître de la nouvelle réaliste, auteur de Boule de Suif, La Parure et Bel-Ami. Il produisit plus de 300 nouvelles en une décennie avant de sombrer dans la folie.',
+   descEn:'Master of the realist short story, author of Boule de Suif, The Necklace and Bel-Ami. He produced over 300 stories in a decade before descending into madness.'},
+  {id:19,wikiSlug:'Man_Ray',cemetery:'montparnasse',name:'Man Ray',born:1890,died:1976,profession:'Artiste, photographe',section:'Division 7',lat:48.84002,lng:2.32621,photo:'',tombPhoto:'',init:'MR',
+   desc:'Artiste américain expatrié à Paris, pionnier du surréalisme. Ses rayographies révolutionnèrent la photographie artistique. Sa pierre porte la formule « unconcerned but not indifferent ».',
+   descEn:'American artist exiled in Paris, pioneer of Surrealism. His rayographs revolutionised art photography. His stone bears the motto "unconcerned but not indifferent".'},
+  {id:20,wikiSlug:'Marguerite_Duras',cemetery:'montparnasse',name:'Marguerite Duras',born:1914,died:1996,profession:'Écrivaine, cinéaste',section:'Division 20',lat:48.84047,lng:2.32696,photo:'',tombPhoto:'',init:'MD',
+   desc:'Auteure de L\'Amant (Prix Goncourt 1984) et du scénario d\'Hiroshima mon amour. Sa prose fragmentée en fait une voix unique de la littérature française.',
+   descEn:'Author of The Lover (Prix Goncourt 1984) and the screenplay for Hiroshima mon amour. Her fragmented prose makes her a unique voice in French literature.'},
+  {id:21,wikiSlug:'Henri_Poincaré',cemetery:'montparnasse',name:'Henri Poincaré',born:1854,died:1912,profession:'Mathématicien, physicien',section:'Division 2',lat:48.83967,lng:2.32529,photo:'',tombPhoto:'',init:'HP',
+   desc:'L\'un des plus grands mathématiciens de l\'histoire, pionnier de la topologie algébrique et fondateur de la théorie du chaos déterministe.',
+   descEn:'One of the greatest mathematicians in history, pioneer of algebraic topology and founder of chaos theory.'},
+  {id:22,wikiSlug:'Susan_Sontag',cemetery:'montparnasse',name:'Susan Sontag',born:1933,died:2004,profession:'Essayiste, romancière',section:'Division 8',lat:48.84035,lng:2.32660,photo:'',tombPhoto:'',init:'SuS',
+   desc:'Intellectuelle américaine, auteure de Sur la photographie et La maladie comme métaphore. Grande admiratrice de la culture française, elle choisit Montparnasse pour sa dernière demeure.',
+   descEn:'American intellectual, author of On Photography and Illness as Metaphor. A great admirer of French culture, she chose Montparnasse for her final resting place.'}
+];
+
+/* ─── Bounds carte par cimetière ─── */
+const CAM = {
+  'pere-lachaise': { center:[48.8608,2.3958], zoom:16 },
+  'montparnasse':  { center:[48.8401,2.3265], zoom:16 },
+  'all':           { center:[48.852, 2.362],  zoom:13 }
+};
+
+/* ─── State ─── */
+let filter     = 'all';
+let query      = '';
+let activeView = 'list';
+let editMode   = false;
+let map        = null;
+let mapMarkers = [];
+let favs      = JSON.parse(localStorage.getItem('cp_favs')      || '[]');
+let customs   = JSON.parse(localStorage.getItem('cp_customs')   || '[]');
+let overrides = JSON.parse(localStorage.getItem('cp_overrides') || '{}'); // surcharges tombes de base
+let currentSheet = null;
+let editingId    = null;
+let routeSelection = JSON.parse(localStorage.getItem('cp_route') || '[]'); // ids ordonnés
+let routeMap   = null;
+let routeLine  = null;
+let activeSubTab = 'choose';
+let activeItTab  = 'list';
+
+// Fusionne les tombes de base avec leurs surcharges éventuelles, puis ajoute les tombes custom
+function allGraves() {
+  const base = GRAVES_BASE.map(g => {
+    if(overrides[g.id]) {
+      // Préserver wikiSlug de la tombe de base — non modifiable via le formulaire
+      return {...g, ...overrides[g.id], id:g.id, wikiSlug:g.wikiSlug};
+    }
+    return g;
+  });
+  return [...base, ...customs];
+}
+
+function cName(c)     { return c==='pere-lachaise'? t('pl') : t('mp'); }
+function isFav(id)    { return favs.includes(id); }
+function isCustom(id) { return customs.some(g=>g.id===id); }
+function isBase(id)   { return GRAVES_BASE.some(g=>g.id===id); }
+function isEdited(id) { return !!overrides[id]; }
+
+/* ════════════════════════════════════════════════════════════
+   WIKIPEDIA IMAGE LOADER
+   Charge les portraits via l'API Wikipedia REST au démarrage.
+   Cache dans localStorage — pas de requête si déjà chargé.
+   ════════════════════════════════════════════════════════════ */
+const WIKI_IMG_KEY = 'cp_wiki_imgs';
+let wikiImgCache = {};
+try { wikiImgCache = JSON.parse(localStorage.getItem(WIKI_IMG_KEY) || '{}'); } catch(e){}
+
+function getGravePhoto(g) {
+  return wikiImgCache[g.id] || g.photo || '';
+}
+
+async function loadWikiImages() {
+  const toLoad = GRAVES_BASE.filter(g => g.wikiSlug && !wikiImgCache[g.id]);
+  if (!toLoad.length) return;
+  let updated = false;
+  for (const g of toLoad) {
+    try {
+      const slug = g.wikiSlug.replace(/ /g,'_');
+      const r = await fetch(
+        'https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(slug),
+        { headers:{ 'Accept':'application/json' }, signal: AbortSignal.timeout(6000) }
+      );
+      if (!r.ok) continue;
+      const d = await r.json();
+      if (d.thumbnail && d.thumbnail.source) {
+        wikiImgCache[g.id] = d.thumbnail.source.replace(/\/\d+px-/,'/400px-');
+        updated = true;
+      }
+    } catch(e) { /* réseau indisponible */ }
+    await new Promise(r=>setTimeout(r,150));
+  }
+  if (updated) {
+    try { localStorage.setItem(WIKI_IMG_KEY, JSON.stringify(wikiImgCache)); } catch(e){}
+    renderList();
+    if (activeView==='favorites') renderFavs();
+  }
+}
+
+async function refreshPortraits() {
+  // Vider le cache et forcer le rechargement depuis Wikipedia
+  wikiImgCache = {};
+  try { localStorage.removeItem(WIKI_IMG_KEY); } catch(e){}
+  showToast(lang==='fr' ? 'Rechargement en cours…' : 'Reloading…');
+  await loadWikiImages();
+  showToast(lang==='fr' ? 'Portraits mis à jour ✓' : 'Portraits updated ✓');
+  renderList();
+  if(activeView==='favorites') renderFavs();
+}
+
+function nextId() {
+  const ids = [22, ...customs.map(g=>g.id)];
+  return Math.max(...ids)+1;
+}
+
+function filteredGraves() {
+  return allGraves().filter(g=>{
+    if(filter!=='all' && g.cemetery!==filter) return false;
+    if(query){ const q=query.toLowerCase(); return g.name.toLowerCase().includes(q)||(g.profession||'').toLowerCase().includes(q)||(g.section||'').toLowerCase().includes(q); }
+    return true;
+  });
+}
+
+function saveFavs()     { localStorage.setItem('cp_favs',      JSON.stringify(favs));      }
+function saveOverrides(){ localStorage.setItem('cp_overrides', JSON.stringify(overrides)); }
+function resetOverride(id){ delete overrides[id]; saveOverrides(); }
+function saveCustoms() { localStorage.setItem('cp_customs', JSON.stringify(customs)); }
+
+/* ─── Favorites ─── */
+function toggleFav(id, e) {
+  if(e){e.stopPropagation();e.preventDefault();}
+  const i=favs.indexOf(id);
+  if(i>=0){favs.splice(i,1);showToast(t('toast_fav_remove'));}
+  else{favs.push(id);showToast(t('toast_fav_add'));}
+  saveFavs(); renderList(); renderFavs();
+  if(currentSheet===id) refreshSheetFavBtn(id);
+}
+
+/* ─── Delete custom ─── */
+function deleteGrave(id, e) {
+  if(e){e.stopPropagation();e.preventDefault();}
+  if(!isCustom(id)){showToast('Tombe prédéfinie : non supprimable');return;}
+  if(!confirm(t('confirm_delete'))) return;
+  customs=customs.filter(g=>g.id!==id);
+  favs=favs.filter(f=>f!==id);
+  saveCustoms();saveFavs();
+  renderList();renderFavs();
+  if(map) refreshMapMarkers();
+  showToast(t('toast_grave_del'));
+}
+
+/* ─── Edit mode ─── */
+function toggleEditMode() {
+  editMode=!editMode;
+  document.getElementById('app').classList.toggle('edit-mode',editMode);
+  const btn=document.getElementById('edit-toggle');
+  btn.classList.toggle('on',editMode);
+  btn.innerHTML=editMode
+    ?`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg> Terminer`
+    :`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Éditer`;
+  renderList();
+}
+
+/* ─── Card HTML ─── */
+function cardHTML(g) {
+  const cust    = isCustom(g.id);
+  const edited  = isEdited(g.id);
+  const inEdit  = editMode;
+  return `<div class="grave-card ${g.cemetery}${cust?' custom':''}" data-id="${g.id}">
+    <div class="grave-thumb"><img src="${getGravePhoto(g)}" alt="${g.name}" onerror="this.outerHTML='<span class=thumb-initials>${g.init}</span>'"></div>
+    <div class="grave-info">
+      <div class="grave-name">${g.name}</div>
+      <div class="grave-dates">${g.born} – ${g.died}</div>
+      <div class="grave-meta">
+        <span class="gtag ${g.cemetery}">${cName(g.cemetery)}</span>
+        <span class="div-tag">📍 ${g.section}</span>
+        ${cust?'<span class="custom-badge">Ajoutée</span>':''}
+        ${edited&&!cust?'<span class="custom-badge" style="background:rgba(127,163,208,.15);color:var(--pl)">Modifiée</span>':''}
+      </div>
+      <div class="grave-prof">${g.profession||''}</div>
+    </div>
+    <button class="fav-btn${isFav(g.id)?' on':''}" data-fav="${g.id}">${isFav(g.id)?'★':'☆'}</button>
+    ${inEdit?`<button class="card-edit-btn" data-edit="${g.id}">✏️</button>`:''}
+    ${inEdit&&cust?`<button class="card-del-btn" data-del="${g.id}">✕</button>`:''}
+  </div>`;
+}
+
+function bindCards(c) {
+  c.querySelectorAll('.grave-card').forEach(card=>{
+    card.addEventListener('click',e=>{
+      if(e.target.closest('.fav-btn')||e.target.closest('.card-del-btn')||e.target.closest('.card-edit-btn')) return;
+      if(editMode){openEditForm(parseInt(card.dataset.id));return;}
+      openSheet(parseInt(card.dataset.id));
+    });
+  });
+  c.querySelectorAll('.fav-btn').forEach(btn=>btn.addEventListener('click',e=>toggleFav(parseInt(btn.dataset.fav),e)));
+  c.querySelectorAll('.card-edit-btn').forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();openEditForm(parseInt(btn.dataset.edit));}));
+  c.querySelectorAll('.card-del-btn').forEach(btn=>btn.addEventListener('click',e=>deleteGrave(parseInt(btn.dataset.del),e)));
+}
+
+/* ─── Render List & Favs ─── */
+function renderList() {
+  const list=filteredGraves();
+  document.getElementById('list-count').textContent=t('grave_count', list.length);
+  const box=document.getElementById('list-container');
+  if(!list.length){box.innerHTML=`<div class="empty-state"><div class="empty-icon">†</div><div class="empty-text">${t('empty_list')}</div></div>`;return;}
+  box.innerHTML=list.map(cardHTML).join('');
+  bindCards(box);
+}
+
+function renderFavs() {
+  const list=allGraves().filter(g=>isFav(g.id));
+  const cnt=document.getElementById('fav-count');
+  const box=document.getElementById('fav-container');
+  if(!list.length){cnt.textContent='';box.innerHTML=`<div class="empty-state"><div class="empty-icon">☆</div><div class="empty-text">${t('empty_favs')}</div></div>`;return;}
+  cnt.textContent=t('fav_count', list.length);
+  box.innerHTML=list.map(cardHTML).join('');
+  bindCards(box);
+}
+
+/* ─── Detail Sheet ─── */
+function openSheet(id) {
+  const g=allGraves().find(x=>x.id===id);
+  if(!g) return;
+  currentSheet=id;
+  const hasTomb = g.tombPhoto && g.tombPhoto.trim();
+  const tombSrc = hasTomb ? g.tombPhoto : '';
+
+  document.getElementById('sheet-inner').innerHTML=`
+    <div class="photo-tabs">
+      <div class="photo-tab active" onclick="switchPhotoTab(this,'ptab-portrait')">${t('photo_portrait')}</div>
+      <div class="photo-tab" onclick="switchPhotoTab(this,'ptab-tombe')">${t('photo_tomb')}</div>
+    </div>
+    <div class="photo-panel active" id="ptab-portrait">
+      <div class="photo-wrap">
+        <img src="${getGravePhoto(g)}" alt="${g.name}" onerror="this.outerHTML='<div class=hero-fallback>${g.init}</div>'">
+        <div class="hero-grad"></div>
+      </div>
+    </div>
+    <div class="photo-panel" id="ptab-tombe">
+      <div class="photo-wrap">
+        ${hasTomb
+          ? `<img src="${tombSrc}" alt="Tombe — ${g.name}" onerror="this.outerHTML='<div class=hero-fallback style=font-size:60px>†</div>'">`
+          : `<div class="hero-fallback" style="flex-direction:column;gap:12px;">
+               <span style="font-size:60px;">†</span>
+               <span style="font-size:13px;color:var(--text-faint);font-family:'Jost',sans-serif;">${lang==='fr'?'Pas encore de photo de tombe':'No grave photo yet'}</span>
+               ${editMode ? `<span style="font-size:12px;color:var(--gold-dim);font-family:'Jost',sans-serif;">${lang==='fr'?'Ajouter via ✏️ Éditer':'Add via ✏️ Edit'}</span>` : ''}
+             </div>`
+        }
+        <div class="hero-grad"></div>
+      </div>
+    </div>
+    <div class="sheet-body">
+      <span class="sheet-tag ${g.cemetery}">${cName(g.cemetery)}</span>
+      <div class="sheet-division">📍 ${g.section}</div>
+      <h2 class="sheet-name">${g.name}</h2>
+      <div class="sheet-dates">${g.born} – ${g.died}</div>
+      <div class="sheet-prof">${g.profession||''}</div>
+      <hr class="sheet-divider">
+      <p class="sheet-desc">${lang==='en'&&g.descEn ? g.descEn : (g.desc||'No description available.')}</p>
+      <p class="section-label">Coordonnées GPS</p>
+      <div class="gps-card">
+        <div class="gps-icon-wrap">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c8a96e" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        </div>
+        <div>
+          <div class="coord-val">${g.lat.toFixed(5)}° N</div>
+          <div class="coord-val">${g.lng.toFixed(5)}° E</div>
+          <div class="coord-sub">${cName(g.cemetery)} · ${g.section}</div>
+        </div>
+      </div>
+      <button class="btn-primary" onclick="openMaps(${g.lat},${g.lng},'${g.name.replace(/'/g,"\\'")}','${g.cemetery}')">${t('open_maps')}</button>
+      <button class="btn-secondary" id="sheet-fav-btn" onclick="toggleFav(${g.id})">
+        <span id="sheet-fav-icon">${isFav(g.id)?'★':'☆'}</span>
+        <span id="sheet-fav-txt">${isFav(g.id)?t('remove_fav'):t('add_fav')}</span>
+      </button>
+      <button class="btn-secondary" id="sheet-route-btn" onclick="toggleRouteSelection(${g.id});refreshSheetRouteBtn(${g.id});">
+        <span id="sheet-route-icon">${routeSelection.includes(g.id)?'✓':''}</span>
+        <span id="sheet-route-txt">${routeSelection.includes(g.id)?t('remove_route'):t('add_route')}</span>
+      </button>
+      ${isCustom(id)&&editMode?`<button class="btn-danger" onclick="if(confirm('Supprimer cette tombe ?')){deleteGrave(${id});closeSheet();}">Supprimer cette tombe</button>`:''}
+      ${editMode?`<button class="btn-secondary" onclick="closeSheet();openEditForm(${id});">✏️ Modifier cette fiche</button>`:''}
+    </div>`;
+
+  document.getElementById('overlay').classList.add('on');
+  document.getElementById('sheet').classList.add('on');
+  document.getElementById('sheet').scrollTop=0;
+}
+
+function switchPhotoTab(tab, panelId) {
+  document.querySelectorAll('.photo-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.photo-panel').forEach(p=>p.classList.remove('active'));
+  tab.classList.add('active');
+  document.getElementById(panelId).classList.add('active');
+}
+
+function refreshSheetFavBtn(id) {
+  const icon=document.getElementById('sheet-fav-icon');
+  const txt=document.getElementById('sheet-fav-txt');
+  if(!icon) return;
+  const on=isFav(id);
+  icon.textContent=on?'★':'☆';
+  txt.textContent=on?t('remove_fav'):t('add_fav');
+}
+
+function refreshSheetRouteBtn(id) {
+  const icon=document.getElementById('sheet-route-icon');
+  const txt=document.getElementById('sheet-route-txt');
+  if(!icon) return;
+  const on=routeSelection.includes(id);
+  icon.textContent=on?'✓':'';
+  txt.textContent=on?t('remove_route'):t('add_route');
+}
+
+function closeSheet() {
+  currentSheet=null;
+  document.getElementById('overlay').classList.remove('on');
+  document.getElementById('sheet').classList.remove('on');
+}
+
+/* ─── Apple Maps ─── */
+function openMaps(lat,lng,name,cemetery) {
+  const label=encodeURIComponent(name+' — '+cName(cemetery));
+  window.location.href=`maps://maps.apple.com/?ll=${lat},${lng}&q=${label}&t=m`;
+  setTimeout(()=>window.open(`https://maps.google.com/?q=${lat},${lng}&query=${label}`,'_blank'),500);
+}
+
+/* ─── MAP ─── */
+function initMap() {
+  if(map){applyMapFilter();return;}
+  map=L.map('map',{center:[48.852,2.362],zoom:13,zoomControl:false,attributionControl:false});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd'}).addTo(map);
+  L.control.attribution({prefix:false,position:'bottomright'}).addAttribution('© OpenStreetMap · CARTO').addTo(map);
+  L.control.zoom({position:'topright'}).addTo(map);
+  // Outlines
+  L.circle([48.8608,2.3958],{radius:420,color:'rgba(127,163,208,.4)',fillColor:'rgba(127,163,208,.05)',fillOpacity:1,weight:1.5}).addTo(map).bindTooltip('Père-Lachaise');
+  L.circle([48.840,2.327],{radius:300,color:'rgba(180,148,216,.4)',fillColor:'rgba(180,148,216,.05)',fillOpacity:1,weight:1.5}).addTo(map).bindTooltip('Montparnasse');
+  refreshMapMarkers();
+  applyMapFilter();
+}
+
+function refreshMapMarkers() {
+  mapMarkers.forEach(m=>map.removeLayer(m)); mapMarkers=[];
+  allGraves().forEach(g=>{
+    const cls=(g.cemetery==='pere-lachaise'?'pl':'mp')+(isCustom(g.id)?' cust':'');
+    const icon=L.divIcon({html:`<div class="custom-marker ${cls}">${g.init}</div>`,iconSize:[32,32],iconAnchor:[16,16],className:''});
+    const m=L.marker([g.lat,g.lng],{icon,title:g.name});
+    m.graveId = g.id;
+    m.graveCemetery = g.cemetery;
+    m.on('click',()=>openSheet(g.id));
+    m.addTo(map);
+    mapMarkers.push(m);
+  });
+}
+
+function setMapFilter(btn, f) {
+  // Sync avec le filtre global
+  filter = f;
+  // Mettre à jour les map-chips
+  document.querySelectorAll('.map-chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  // Mettre à jour les chips du header aussi
+  document.querySelectorAll('.chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.filter === f);
+  });
+  updateChipCounts();
+  renderList();
+  applyMapFilter();
+}
+
+function applyMapFilter() {
+  if(!map) return;
+  const b = CAM[filter] || CAM['all'];
+  map.flyTo(b.center, b.zoom, {duration:.85});
+
+  // Afficher/masquer les marqueurs selon le filtre
+  mapMarkers.forEach(m => {
+    const show = filter === 'all' || m.graveCemetery === filter;
+    if(show && !map.hasLayer(m)) m.addTo(map);
+    else if(!show && map.hasLayer(m)) map.removeLayer(m);
+  });
+}
+
+/* ─── FORM ─── */
+function openAddForm() {
+  editingId=null;
+  document.getElementById('form-title').textContent=t('form_new');
+  document.getElementById('f-cemetery').value=filter!=='all'?filter:'pere-lachaise';
+  ['f-name','f-born','f-died','f-profession','f-section','f-lat','f-lng','f-photo','f-tomb','f-desc'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('prev-photo').className='photo-preview';
+  document.getElementById('prev-tomb').className='photo-preview';
+  document.getElementById('form-overlay').classList.add('on');
+  document.getElementById('form-sheet').classList.add('on');
+  document.getElementById('form-sheet').scrollTop=0;
+}
+
+function openEditForm(id) {
+  // Cherche dans toutes les tombes (base + custom), avec overrides appliqués
+  const g = allGraves().find(x=>x.id===id);
+  if(!g) return;
+  editingId = id;
+  const cust = isCustom(id);
+  document.getElementById('form-title').textContent = cust ? t('form_edit') : t('form_edit_base', g.name);
+  document.getElementById('f-cemetery').value  = g.cemetery;
+  document.getElementById('f-name').value      = g.name;
+  document.getElementById('f-born').value      = g.born;
+  document.getElementById('f-died').value      = g.died;
+  document.getElementById('f-profession').value= g.profession||'';
+  document.getElementById('f-section').value   = g.section||'';
+  document.getElementById('f-lat').value       = g.lat;
+  document.getElementById('f-lng').value       = g.lng;
+  document.getElementById('f-photo').value     = g.photo||'';
+  document.getElementById('f-tomb').value      = g.tombPhoto||'';
+  document.getElementById('f-desc').value      = g.desc||'';
+  // Afficher/cacher le bouton reset selon si c'est une tombe de base modifiée
+  const resetRow = document.getElementById('form-reset-row');
+  if(resetRow) resetRow.style.display = (!cust && isEdited(id)) ? 'block' : 'none';
+  const resetBtn = document.getElementById('form-reset-btn');
+  if(resetBtn) resetBtn.onclick = () => { resetOverride(id); closeAddForm(); renderList(); renderFavs(); if(map) refreshMapMarkers(); showToast(t('toast_restored')); };
+  previewPhoto('f-photo','prev-photo');
+  previewPhoto('f-tomb','prev-tomb');
+  document.getElementById('form-overlay').classList.add('on');
+  document.getElementById('form-sheet').classList.add('on');
+  document.getElementById('form-sheet').scrollTop=0;
+}
+
+function closeAddForm() {
+  document.getElementById('form-overlay').classList.remove('on');
+  document.getElementById('form-sheet').classList.remove('on');
+}
+
+function previewPhoto(inputId, previewId) {
+  const url=document.getElementById(inputId).value.trim();
+  const img=document.getElementById(previewId);
+  if(!url){img.className='photo-preview';return;}
+  img.onload=()=>img.className='photo-preview loaded';
+  img.onerror=()=>img.className='photo-preview';
+  img.src=url;
+}
+
+function saveGrave() {
+  const name=document.getElementById('f-name').value.trim();
+  const born=parseInt(document.getElementById('f-born').value);
+  const died=parseInt(document.getElementById('f-died').value);
+  const lat=parseFloat(document.getElementById('f-lat').value);
+  const lng=parseFloat(document.getElementById('f-lng').value);
+  const sect=document.getElementById('f-section').value.trim();
+  if(!name){alert(t('alert_name'));return;}
+  if(!born||!died){alert(t('alert_dates'));return;}
+  if(!sect){alert(t('alert_section'));return;}
+  if(isNaN(lat)||isNaN(lng)){alert(t('alert_gps'));return;}
+
+  const init=name.split(' ').map(w=>w[0]||'').join('').slice(0,3).toUpperCase();
+  const grave={
+    id: editingId!==null?editingId:nextId(),
+    cemetery: document.getElementById('f-cemetery').value,
+    name, born, died,
+    profession: document.getElementById('f-profession').value.trim(),
+    section: sect, lat, lng,
+    desc: document.getElementById('f-desc').value.trim(),
+    photo: document.getElementById('f-photo').value.trim(),
+    tombPhoto: document.getElementById('f-tomb').value.trim(),
+    init
+  };
+
+  if(editingId !== null) {
+    if(isBase(editingId)) {
+      overrides[editingId] = grave;
+      saveOverrides();
+      showToast(t('toast_grave_edit'));
+    } else {
+      const i = customs.findIndex(g=>g.id===editingId);
+      customs[i] = grave;
+      saveCustoms();
+      showToast(t('toast_grave_edit'));
+    }
+  } else {
+    customs.push(grave);
+    saveCustoms();
+    showToast(t('toast_grave_add'));
+  }
+
+  closeAddForm();
+  renderList(); renderFavs();
+  updateChipCounts();
+  if(map) refreshMapMarkers();
+}
+
+/* ─── Nav ─── */
+function switchView(v) {
+  activeView = v;
+  const VIEWS = ['list','map','favorites'];
+  const routeEl = document.getElementById('view-route');
+
+  if(v === 'route') {
+    // Masquer toutes les vues normales
+    VIEWS.forEach(id => {
+      const el = document.getElementById('view-' + id);
+      if(el) { el.style.display = 'none'; el.classList.remove('active'); }
+    });
+    document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+    document.querySelector('.nav-btn[data-view="route"]').classList.add('active');
+    routeEl.style.display = 'flex';
+    document.getElementById('app-header').style.display = '';
+    renderRouteView();
+    return;
+  }
+
+  // Masquer route
+  if(routeEl) routeEl.style.display = 'none';
+
+  // Masquer toutes les vues normales via style ET classe
+  VIEWS.forEach(id => {
+    const el = document.getElementById('view-' + id);
+    if(el) { el.style.display = 'none'; el.classList.remove('active'); }
+  });
+
+  // Activer la vue cible
+  const target = document.getElementById('view-' + v);
+  if(target) {
+    target.style.display = 'flex';
+    target.style.flexDirection = 'column';
+    target.classList.add('active');
+  }
+
+  document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+  document.querySelector(`.nav-btn[data-view="${v}"]`).classList.add('active');
+  document.getElementById('app-header').style.display = (v === 'map') ? 'none' : '';
+  if(v === 'map') {
+    initMap();
+    setTimeout(() => { if(map) map.invalidateSize(); }, 50);
+    // Sync les map-chips avec le filtre actuel
+    document.querySelectorAll('.map-chip').forEach(c => {
+      c.classList.toggle('active', c.dataset.filter === filter);
+    });
+  }
+  if(v === 'favorites') renderFavs();
+}
+
+/* ════════════════════════════════════════
+   PARCOURS — itinerary feature
+   ════════════════════════════════════════ */
+function saveRoute(){ localStorage.setItem('cp_route', JSON.stringify(routeSelection)); }
+
+/* Haversine distance in meters between two {lat,lng} points */
+function haversine(a, b) {
+  const R=6371000, toRad=x=>x*Math.PI/180;
+  const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng);
+  const s=Math.sin(dLat/2)**2+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+
+function fmtDist(m){ return m<1000 ? Math.round(m)+'m' : (m/1000).toFixed(1)+'km'; }
+
+/* Nearest-neighbor route optimisation (greedy TSP) */
+function optimizeOrder(graves) {
+  if(graves.length<=2) return [...graves];
+  const unvisited=[...graves];
+  const result=[unvisited.splice(0,1)[0]];
+  while(unvisited.length){
+    const last=result[result.length-1];
+    let best=0, bestD=Infinity;
+    unvisited.forEach((g,i)=>{ const d=haversine(last,g); if(d<bestD){bestD=d;best=i;} });
+    result.push(unvisited.splice(best,1)[0]);
+  }
+  return result;
+}
+
+function totalDistance(graves){
+  let d=0;
+  for(let i=1;i<graves.length;i++) d+=haversine(graves[i-1],graves[i]);
+  return d;
+}
+
+function toggleRouteSelection(id) {
+  const idx=routeSelection.indexOf(id);
+  if(idx>=0) routeSelection.splice(idx,1);
+  else routeSelection.push(id);
+  saveRoute();
+  renderRouteView();
+}
+
+function clearRoute(){
+  if(routeSelection.length && !confirm(t('confirm_route'))) return;
+  routeSelection=[];
+  saveRoute();
+  renderRouteView();
+}
+
+function switchSubTab(tab) {
+  activeSubTab=tab;
+  document.getElementById('subtab-choose').classList.toggle('active', tab==='choose');
+  document.getElementById('subtab-itinerary').classList.toggle('active', tab==='itinerary');
+  document.getElementById('subview-choose').style.display    = tab==='choose'?'':'none';
+  const itEl=document.getElementById('subview-itinerary');
+  const mapEl=document.getElementById('subview-map');
+  const itTabsEl=document.getElementById('itinerary-tabs');
+  if(tab==='itinerary'){
+    itEl.style.display  = activeItTab==='list' ? '' : 'none';
+    mapEl.style.display = activeItTab==='map'  ? '' : 'none';
+    itTabsEl.style.display='';
+    if(activeItTab==='map') renderRouteMapView();
+  } else {
+    itEl.style.display='none';
+    mapEl.style.display='none';
+    itTabsEl.style.display='none';
+  }
+}
+
+function switchItTab(tab){
+  activeItTab=tab;
+  document.getElementById('it-subtab-list').classList.toggle('active', tab==='list');
+  document.getElementById('it-subtab-map').classList.toggle('active',  tab==='map');
+  document.getElementById('subview-itinerary').style.display = tab==='list' ? '' : 'none';
+  document.getElementById('subview-map').style.display       = tab==='map'  ? '' : 'none';
+  if(tab==='map') renderRouteMapView();
+}
+
+function renderRouteView(){
+  const selectedGraves = routeSelection.map(id=>allGraves().find(g=>g.id===id)).filter(Boolean);
+  const ordered = optimizeOrder(selectedGraves);
+  const total   = selectedGraves.length >= 2 ? totalDistance(ordered) : 0;
+  const walkMin = Math.round(total / 80); // ~80m/min walking speed
+
+  // Stats bar
+  document.getElementById('stat-count').textContent = routeSelection.length;
+  document.getElementById('stat-dist').textContent  = routeSelection.length>=2 ? (total/1000).toFixed(2) : '—';
+  document.getElementById('stat-time').textContent  = routeSelection.length>=2 ? walkMin+'min' : '—';
+
+  // CTA button
+  const ctaBtn = document.getElementById('route-cta-btn');
+  ctaBtn.disabled = routeSelection.length < 1;
+
+  // Selection list
+  const selBox = document.getElementById('sel-list-container');
+  const all = allGraves();
+  selBox.innerHTML = all.map(g => {
+    const sel = routeSelection.includes(g.id);
+    const num = sel ? ordered.findIndex(x=>x.id===g.id)+1 : null;
+    return `<div class="sel-card ${g.cemetery}${sel?' selected':''}" onclick="toggleRouteSelection(${g.id})">
+      <div class="sel-check">${sel ? '✓' : ''}</div>
+      <div class="sel-info">
+        <div class="sel-name">${g.name}</div>
+        <div class="sel-meta">${cName(g.cemetery)} · ${g.section}</div>
+      </div>
+      ${sel ? `<div class="sel-num">${num}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Itinerary steps
+  const stepsBox = document.getElementById('route-steps-container');
+  if(!ordered.length){
+    stepsBox.innerHTML=`<div style="text-align:center;padding:40px 20px;">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:44px;color:var(--gold-dim);margin-bottom:12px;">†</div>
+      <p style="color:var(--text-faint);font-size:15px;line-height:1.6;max-width:220px;margin:auto;">${t('route_empty')}</p>
+    </div>`;
+  } else {
+    stepsBox.innerHTML = ordered.map((g,i)=>{
+      const isLast = i===ordered.length-1;
+      const nextG  = !isLast ? ordered[i+1] : null;
+      const dist   = nextG ? haversine(g, nextG) : null;
+      return `<div class="route-step">
+        <div class="route-step-connector">
+          <div class="route-step-num">${i+1}</div>
+          ${!isLast ? '<div class="route-step-line"></div>' : ''}
+        </div>
+        <div class="route-step-body" onclick="openSheet(${g.id})" style="cursor:pointer;">
+          <div class="route-step-name">${g.name}</div>
+          <div class="route-step-sub">${cName(g.cemetery)} · ${g.section} · ${g.born}–${g.died}</div>
+          ${dist ? `<div class="route-step-dist">↓ ${fmtDist(dist)} à pied jusqu'à l'étape suivante</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Re-apply sub tab visibility
+  switchSubTab(activeSubTab);
+}
+
+function renderRouteMapView(){
+  const selectedGraves = routeSelection.map(id=>allGraves().find(g=>g.id===id)).filter(Boolean);
+  const ordered = optimizeOrder(selectedGraves);
+
+  if(!routeMap){
+    const center = ordered.length ? [ordered[0].lat, ordered[0].lng] : [48.852, 2.362];
+    routeMap = L.map('route-map', { center, zoom:15, zoomControl:false, attributionControl:false });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd'}).addTo(routeMap);
+    L.control.zoom({position:'topright'}).addTo(routeMap);
+  }
+
+  // Clear previous
+  if(routeMap._routeLayer){ routeMap.removeLayer(routeMap._routeLayer); }
+  if(routeMap._markerLayer){ routeMap.removeLayer(routeMap._markerLayer); }
+
+  if(!ordered.length) return;
+
+  const markerGroup = L.layerGroup().addTo(routeMap);
+  routeMap._markerLayer = markerGroup;
+
+  ordered.forEach((g,i)=>{
+    const icon = L.divIcon({
+      html:`<div style="width:32px;height:32px;border-radius:50%;background:var(--gold);color:#141410;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;border:2.5px solid rgba(255,255,255,.3);box-shadow:0 2px 8px rgba(0,0,0,.5);">${i+1}</div>`,
+      iconSize:[32,32], iconAnchor:[16,16], className:''
+    });
+    L.marker([g.lat,g.lng],{icon}).addTo(markerGroup).on('click',()=>openSheet(g.id));
+  });
+
+  // Polyline
+  const coords = ordered.map(g=>[g.lat,g.lng]);
+  const line = L.polyline(coords, { color:'#c8a96e', weight:2.5, opacity:.7, dashArray:'6 5' }).addTo(routeMap);
+  routeMap._routeLayer = line;
+
+  // Fit bounds
+  const bounds = L.latLngBounds(coords);
+  routeMap.fitBounds(bounds, {padding:[40,40]});
+  setTimeout(()=>routeMap.invalidateSize(),100);
+}
+
+function launchInMaps(){
+  const selectedGraves = routeSelection.map(id=>allGraves().find(g=>g.id===id)).filter(Boolean);
+  const ordered = optimizeOrder(selectedGraves);
+  if(!ordered.length) return;
+  if(ordered.length===1){
+    openMaps(ordered[0].lat, ordered[0].lng, ordered[0].name, ordered[0].cemetery);
+    return;
+  }
+  // Apple Maps directions with multiple waypoints
+  // Format: maps://maps.apple.com/?saddr=...&daddr=...&daddr=...
+  const first=ordered[0];
+  const rest=ordered.slice(1);
+  const saddr=`${first.lat},${first.lng}`;
+  const daddr=rest.map(g=>`${g.lat},${g.lng}`).join('&daddr=');
+  window.location.href=`maps://maps.apple.com/?saddr=${saddr}&daddr=${daddr}&dirflg=w`;
+  // Google Maps fallback (waypoints)
+  setTimeout(()=>{
+    const origin=`${first.lat},${first.lng}`;
+    const dest=`${ordered[ordered.length-1].lat},${ordered[ordered.length-1].lng}`;
+    const waypts=ordered.slice(1,-1).map(g=>`${g.lat},${g.lng}`).join('|');
+    const url=`https://maps.google.com/maps?saddr=${origin}&daddr=${dest}${waypts?'&waypoints='+waypts:''}&travelmode=walking`;
+    window.open(url,'_blank');
+  },600);
+}
+
+/* ════════════════════════════════════════
+   PARTAGE — Web Share API
+   ════════════════════════════════════════ */
+function shareCurrentGrave(){
+  if(currentSheet==null) return;
+  const g=allGraves().find(x=>x.id===currentSheet);
+  if(!g) return;
+  shareGrave(g);
+}
+
+async function shareGrave(g){
+  const _d=lang==='en'&&g.descEn?g.descEn:(g.desc||'');
+const text=`${g.name} (${g.born}\u2013${g.died})\n${g.profession||''}\n\n${cName(g.cemetery)} \u00b7 ${g.section}\nGPS: ${g.lat.toFixed(5)}\u00b0 N, ${g.lng.toFixed(5)}\u00b0 E\n\n${_d.slice(0,200)}${_d.length>200?'\u2026':''}`;
+  const mapsUrl=`https://maps.google.com/?q=${g.lat},${g.lng}`;
+  if(navigator.share){
+    try {
+      await navigator.share({ title:g.name, text, url:mapsUrl });
+    } catch(e){ if(e.name!=='AbortError') copyToClipboard(text, g.name); }
+  } else {
+    copyToClipboard(text, g.name);
+  }
+}
+
+function copyToClipboard(text, name){
+  if(navigator.clipboard){ navigator.clipboard.writeText(text).then(()=>showToast(t('toast_shared'))).catch(()=>showToast('Copie non disponible')); }
+  else { showToast('Partage non disponible sur ce navigateur'); }
+}
+
+/* ─── Toast ─── */
+let toastTimer=null;
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),2300);
+}
+
+/* ─── Chip counts ─── */
+function updateChipCounts(){
+  const all=allGraves();
+  const pl=all.filter(g=>g.cemetery==='pere-lachaise').length;
+  const mp=all.filter(g=>g.cemetery==='montparnasse').length;
+  const chips=document.querySelectorAll('.chip');
+  chips[0].textContent=t('all')+' · '+all.length;
+  chips[1].textContent=`Père-Lachaise · ${pl}`;
+  chips[2].textContent=`Montparnasse · ${mp}`;
+}
+
+
+/* ════════════════════════════════════════
+   PARAMÈTRES
+   ════════════════════════════════════════ */
+function openSettings() {
+  renderSettingsContent();
+  document.getElementById('settings-overlay').classList.add('on');
+  document.getElementById('settings-sheet').classList.add('on');
+}
+function closeSettings() {
+  document.getElementById('settings-overlay').classList.remove('on');
+  document.getElementById('settings-sheet').classList.remove('on');
+}
+
+/* ─── Excel Column Definitions ─── */
+const XL_COLS = [
+  {key:'id',          label:'ID',              width:8},
+  {key:'cemetery',    label:'Cimetière',        width:18},
+  {key:'name',        label:'Nom',              width:26},
+  {key:'born',        label:'Naissance',        width:11},
+  {key:'died',        label:'Décès',            width:11},
+  {key:'profession',  label:'Profession',       width:24},
+  {key:'section',     label:'Division',         width:18},
+  {key:'lat',         label:'Latitude',         width:13},
+  {key:'lng',         label:'Longitude',        width:13},
+  {key:'photo',       label:'Photo Portrait URL',  width:60},
+  {key:'tombPhoto',   label:'Photo Tombe URL',     width:60},
+  {key:'desc',        label:'Biographie',          width:80},
+  {key:'init',        label:'Initiales',           width:10},
+  {key:'source',      label:'Source',              width:12},
+];
+
+/* ─── EXPORT ─── */
+function exportExcel() {
+  if(typeof XLSX === 'undefined') { showToast('Chargement de la librairie…'); return; }
+
+  const wb = XLSX.utils.book_new();
+  const graves = allGraves();
+
+  // Build rows
+  const header = XL_COLS.map(c => c.label);
+  const rows = graves.map(g => XL_COLS.map(col => {
+    if(col.key === 'source') return isCustom(g.id) ? 'ajoutée' : (isEdited(g.id) ? 'modifiée' : 'base');
+    const v = g[col.key];
+    return v === undefined || v === null ? '' : v;
+  }));
+
+  const wsData = [header, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Column widths
+  ws['!cols'] = XL_COLS.map(c => ({ wch: c.width }));
+
+  // Freeze header row
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+  // Style header row (bold gold background) — basic cell metadata
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for(let C = range.s.c; C <= range.e.c; C++) {
+    const addr = XLSX.utils.encode_cell({ r: 0, c: C });
+    if(!ws[addr]) continue;
+    ws[addr].s = {
+      font: { bold: true, color: { rgb: '141410' } },
+      fill: { fgColor: { rgb: 'C8A96E' } },
+      alignment: { vertical: 'center' }
+    };
+  }
+
+  // Make photo URLs clickable hyperlinks
+  const photoColIdx  = XL_COLS.findIndex(c => c.key === 'photo');
+  const tombColIdx   = XL_COLS.findIndex(c => c.key === 'tombPhoto');
+  rows.forEach((row, ri) => {
+    [photoColIdx, tombColIdx].forEach(ci => {
+      const url = row[ci];
+      if(url && typeof url === 'string' && url.startsWith('http')) {
+        const addr = XLSX.utils.encode_cell({ r: ri + 1, c: ci });
+        if(ws[addr]) ws[addr].l = { Target: url, Tooltip: 'Ouvrir la photo' };
+      }
+    });
+  });
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Tombes');
+
+  // Stats sheet
+  const statsData = [
+    ['Statistiques', ''],
+    ['Total tombes', graves.length],
+    ['Père-Lachaise', graves.filter(g => g.cemetery === 'pere-lachaise').length],
+    ['Montparnasse',  graves.filter(g => g.cemetery === 'montparnasse').length],
+    ['Tombes de base', GRAVES_BASE.length],
+    ['Tombes ajoutées', customs.length],
+    ['Tombes modifiées', Object.keys(overrides).length],
+    ['Favoris', favs.length],
+    ['Date export', new Date().toLocaleDateString('fr-FR', { day:'2-digit', month:'long', year:'numeric' })],
+    ['Application', 'Cimetières Célèbres v1.4.0'],
+  ];
+  const wsStats = XLSX.utils.aoa_to_sheet(statsData);
+  wsStats['!cols'] = [{ wch: 22 }, { wch: 30 }];
+  XLSX.utils.book_append_sheet(wb, wsStats, 'Infos');
+
+  const date = new Date().toISOString().slice(0,10);
+  const filename = `Cimetières Célèbres — ${date}.xlsx`;
+  shareOrDownloadXLSX(wb, filename, 'Export Excel prêt ✓');
+}
+
+/* ─── TEMPLATE ─── */
+function downloadTemplate() {
+  if(typeof XLSX === 'undefined') { showToast('Chargement de la librairie…'); return; }
+  const wb = XLSX.utils.book_new();
+  const header = XL_COLS.filter(c => c.key !== 'source').map(c => c.label);
+  const example = [
+    '', 'pere-lachaise', 'Exemple Prénom Nom', 1850, 1920,
+    'Écrivain, poète', 'Division 12', 48.86100, 2.39500,
+    'https://upload.wikimedia.org/…portrait.jpg',
+    'https://upload.wikimedia.org/…tombe.jpg',
+    'Courte biographie…', 'PN'
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([header, example]);
+  ws['!cols'] = XL_COLS.filter(c => c.key !== 'source').map(c => ({ wch: c.width }));
+  XLSX.utils.book_append_sheet(wb, ws, 'Tombes');
+  shareOrDownloadXLSX(wb, 'cimetieres-modele.xlsx', 'Modèle prêt ✓');
+}
+
+/* ─── iOS-safe Excel share/download ─────────────────────────────
+   Sur iOS/WKWebView, XLSX.writeFile() ne fonctionne pas car il
+   tente de créer un <a download> ou d'appeler msSaveBlob, deux
+   mécanismes bloqués par WebKit.
+   Solution : on génère un Blob puis on passe par le Web Share API
+   natif iOS (feuille de partage système → Fichiers, Mail, AirDrop…)
+   ou, en fallback navigateur desktop, un lien <a download>.
+   ─────────────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════
+   EXPORT EXCEL — Filesystem natif avec fallbacks
+   ═══════════════════════════════════════════════════ */
+async function shareOrDownloadXLSX(wb, filename, successMsg) {
+  const wbout = XLSX.write(wb, { bookType:'xlsx', type:'array' });
+  const blob  = new Blob([wbout], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
+
+  // ── 1. Capacitor Filesystem natif ──────────────────
+  // iOS crée déjà un dossier au nom de l'app dans Fichiers.
+  // On écrit directement à la racine de Documents — pas de sous-dossier.
+  const FS = window.Capacitor
+          && window.Capacitor.Plugins
+          && window.Capacitor.Plugins.Filesystem;
+
+  if(FS) {
+    try {
+      const base64 = await blobToBase64(blob);
+      await FS.writeFile({
+        path:      filename,
+        data:      base64,
+        directory: 'DOCUMENTS'
+      });
+
+      showToast(t('toast_exported'));
+      return;
+    } catch(e) {
+      console.warn('[Filesystem export]', e.message);
+    }
+  }
+
+  // ── 2. Web Share API (feuille de partage iOS) ──────
+  if(navigator.share && navigator.canShare) {
+    try {
+      const file = new File([blob], filename, { type: blob.type });
+      if(navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Cimetières Célèbres',
+          text:  'Export du ' + new Date().toLocaleDateString('fr-FR')
+        });
+        showToast(successMsg + ' (Partage)');
+        return;
+      }
+    } catch(e) {
+      if(e.name === 'AbortError') return;
+    }
+  }
+
+  // ── 3. Fallback <a download> (navigateur desktop) ──
+  fallbackDownload(blob, filename, successMsg);
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function fallbackDownload(blob, filename, successMsg) {
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+  showToast(successMsg);
+}
+
+/* ─── IMPORT ─── */
+function importExcel(input) {
+  const file = input.files[0];
+  if(!file) return;
+  if(typeof XLSX === 'undefined') { showToast('Chargement de la librairie…'); input.value=''; return; }
+
+  const progress  = document.getElementById('import-progress');
+  const statusEl  = document.getElementById('import-status');
+  const barEl     = document.getElementById('import-bar');
+  const logEl     = document.getElementById('import-log');
+
+  progress.classList.add('on');
+  barEl.style.width = '10%';
+  statusEl.textContent = t('import_reading');
+  logEl.innerHTML = '';
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      barEl.style.width = '30%';
+      statusEl.textContent = 'Analyse des données…';
+
+      const wb  = XLSX.read(new Uint8Array(e.target.result), { type:'array' });
+      const ws  = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws, { defval:'' });
+
+      if(!raw.length) throw new Error('Feuille vide ou format incorrect');
+
+      barEl.style.width = '50%';
+      statusEl.textContent = t('import_proc', raw.length);
+
+      // Map column labels → keys
+      const COL_MAP = {};
+      XL_COLS.forEach(c => { COL_MAP[c.label] = c.key; });
+
+      let added = 0, updated = 0, skipped = 0, errors = 0;
+      const logs = [];
+
+      raw.forEach((row, idx) => {
+        try {
+          // Normalise keys (accept both label and key)
+          const g = {};
+          Object.entries(row).forEach(([k, v]) => {
+            const mapped = COL_MAP[k] || k;
+            g[mapped] = v;
+          });
+
+          const name = String(g.name || '').trim();
+          if(!name) { skipped++; return; }
+
+          const lat = parseFloat(g.lat);
+          const lng = parseFloat(g.lng);
+          if(isNaN(lat) || isNaN(lng)) { errors++; logs.push(`⚠ Ligne ${idx+2} : GPS manquant pour « ${name} »`); return; }
+
+          const cemetery = String(g.cemetery || 'pere-lachaise').trim().toLowerCase().replace(/[éè]/g,'e').replace(/\s+/g,'-');
+          const normCemetery = cemetery.includes('montparnasse') ? 'montparnasse' : 'pere-lachaise';
+
+          const born = parseInt(g.born) || 0;
+          const died = parseInt(g.died) || 0;
+
+          const grave = {
+            cemetery: normCemetery,
+            name,
+            born, died,
+            profession: String(g.profession || '').trim(),
+            section:    String(g.section    || '').trim() || 'Inconnu',
+            lat, lng,
+            desc:       String(g.desc       || '').trim(),
+            photo:      String(g.photo      || '').trim(),
+            tombPhoto:  String(g.tombPhoto  || '').trim(),
+            init:       String(g.init       || name.split(' ').map(w=>w[0]||'').join('').slice(0,3).toUpperCase()),
+          };
+
+          // Check if it matches a base grave by name (case-insensitive)
+          const baseMatch = GRAVES_BASE.find(b => b.name.toLowerCase() === name.toLowerCase());
+          if(baseMatch) {
+            const source = String(g.source || '').trim();
+            if(source === 'base') {
+              // Reset override
+              delete overrides[baseMatch.id];
+              logs.push(`↩ ${name} : override réinitialisé`);
+            } else {
+              overrides[baseMatch.id] = grave;
+              updated++;
+              logs.push(`✓ ${name} : mise à jour`);
+            }
+            return;
+          }
+
+          // Check existing custom by name
+          const custMatch = customs.find(c => c.name.toLowerCase() === name.toLowerCase());
+          if(custMatch) {
+            const i = customs.indexOf(custMatch);
+            customs[i] = { ...grave, id: custMatch.id };
+            updated++;
+            logs.push(`✓ ${name} : tombe personnalisée mise à jour`);
+            return;
+          }
+
+          // New custom grave
+          const id = parseInt(g.id) > 22 ? parseInt(g.id) : nextId();
+          customs.push({ ...grave, id });
+          added++;
+          logs.push(`+ ${name} : ajoutée (id ${id})`);
+
+        } catch(err) {
+          errors++;
+          logs.push(`✗ Ligne ${idx+2} : erreur — ${err.message}`);
+        }
+      });
+
+      saveCustoms();
+      saveOverrides();
+
+      barEl.style.width = '100%';
+      statusEl.textContent = t('import_done', added, updated, skipped, errors);
+      logEl.innerHTML = logs.map(l => `<div>${l}</div>`).join('');
+
+      renderList(); renderFavs(); updateChipCounts();
+      if(map) refreshMapMarkers();
+      if(activeView==='route') renderRouteView();
+
+      showToast(`Import : ${added} ajoutées, ${updated} mises à jour ✓`);
+    } catch(err) {
+      barEl.style.width = '100%';
+      barEl.style.background = 'var(--danger)';
+      statusEl.textContent = t('import_error') + err.message;
+      logEl.innerHTML = `<div style="color:var(--danger)">Vérifiez que le fichier est un .xlsx exporté par cette application.</div>`;
+    }
+    input.value = '';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ─── Reset all data ─── */
+function resetAllData() {
+  if(!confirm(t('confirm_reset'))) return;
+  customs = []; overrides = {}; favs = [];
+  saveCustoms(); saveOverrides(); saveFavs();
+  renderList(); renderFavs(); updateChipCounts();
+  if(map) refreshMapMarkers();
+  closeSettings();
+  showToast(t('toast_data_reset'));
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+/* ─── Events ─── */
+document.querySelectorAll('.nav-btn').forEach(btn=>btn.addEventListener('click',()=>switchView(btn.dataset.view)));
+
+document.querySelectorAll('.chip').forEach(chip=>chip.addEventListener('click',()=>{
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  chip.classList.add('active');
+  filter=chip.dataset.filter;
+  renderList();
+  if(activeView==='map') applyMapFilter();
+}));
+
+document.getElementById('search-input').addEventListener('input',e=>{query=e.target.value.trim();renderList();});
+document.getElementById('overlay').addEventListener('click',closeSheet);
+  document.querySelector('.sheet-handle-row') && document.querySelector('.sheet-handle-row').addEventListener('click',closeSheet);
+document.getElementById('form-overlay').addEventListener('click',closeAddForm);
+document.getElementById('settings-overlay').addEventListener('click',closeSettings);
+
+// Swipe down to close sheet
+const sheet=document.getElementById('sheet');
+let sy=0, sScrollTop=0;
+sheet.addEventListener('touchstart',e=>{
+  sy=e.touches[0].clientY;
+  sScrollTop=sheet.scrollTop;
+},{passive:true});
+sheet.addEventListener('touchmove',e=>{
+  const dy=e.touches[0].clientY-sy;
+  // Fermer si on tire vers le bas depuis le haut de la sheet
+  if(sScrollTop===0 && dy>50) closeSheet();
+},{passive:true});
+// Tap sur la poignée = fermer immédiatement
+document.querySelector('.sheet-handle-row') && document.querySelector('.sheet-handle-row').addEventListener('click', closeSheet);
+
+/* ─── Init ─── */
+updateChipCounts();
+// WKWebView ne garantit pas le recalcul CSS pendant le parsing.
+// On force display via style inline — plus fiable que classList seul.
+(function initApp() {
+  const VIEWS = ['list','map','favorites'];
+  // Forcer display:none sur toutes les vues normales
+  VIEWS.forEach(v => {
+    const el = document.getElementById('view-' + v);
+    if(el) { el.style.display = 'none'; el.classList.remove('active'); }
+  });
+  // Vue route (fixed overlay) — masquée
+  const routeEl = document.getElementById('view-route');
+  if(routeEl) routeEl.style.display = 'none';
+  // Activer view-list via style ET classe
+  const listEl = document.getElementById('view-list');
+  if(listEl) {
+    listEl.style.display = 'flex';
+    listEl.style.flexDirection = 'column';
+    listEl.classList.add('active');
+  }
+  // Nav
+  document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+  const listNav = document.querySelector('.nav-btn[data-view="list"]');
+  if(listNav) listNav.classList.add('active');
+  document.getElementById('app-header').style.display = '';
+  renderList();
+  applyLang();
+  // Charger les photos Wikipedia en arrière-plan
+  loadWikiImages();
+})();
+});
+</script>
+
+</body>
+</html>
