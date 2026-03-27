@@ -1,13 +1,18 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+    <style>
+      html, body { background: #141410 !important; }
+    </style>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="format-detection" content="telephone=no">
 <title>Cimetières Célèbres</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet"></noscript>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   :root {
@@ -296,9 +301,31 @@
   /* Share button in sheet */
   .share-btn { position:absolute; top:18px; right:16px; width:34px; height:34px; border-radius:50%; background:rgba(200,169,110,.12); border:1px solid var(--border-strong); color:var(--gold); cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:10; }
   .sheet-handle-row { position:relative; display:flex; justify-content:center; align-items:center; padding:16px 0 8px; min-height:48px; cursor:grab; }
+  .other-apps-section { background: none ; border: 2px solid #8b5cf6; border-radius: var(--radius); padding: 16px; margin-bottom: 24px; }
+
+  .other-apps-section { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 24px; }
+  .other-apps-title { font-size: 0.72rem; font-weight: 700; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+  .other-app-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--card); border-radius: 10px; text-decoration: none; border: 1px solid var(--border); margin-bottom: 8px; }
+  .other-app-row:last-child { margin-bottom: 0; }
+  .other-app-emoji { font-size: 1.5rem; width: 32px; text-align: center; flex-shrink: 0; }
+  .other-app-info { flex: 1; }
+  .other-app-name { font-weight: 600; color: var(--ink); font-size: 0.9rem; }
+  .other-app-sub { font-size: 0.75rem; color: var(--ink3); }
+  .other-app-arrow { color: var(--ink3); font-size: 1.1rem; flex-shrink: 0; }
+  .other-app-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--card); border-radius: 10px; text-decoration: none; color: inherit; border: 1px solid var(--border); margin-bottom: 8px; }
 </style>
 </head>
-<body>
+<body bgcolor="#141410">
+  <div style="font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;color:var(--ink)">
+    Mes<span style="color:var(--accent)">Restaurants</span>
+  </div>
+  <div style="
+    width:36px;height:36px;border-radius:50%;
+    border:3px solid var(--border);
+    border-top-color:var(--accent);
+    animation:spin 0.8s linear infinite;
+  "></div>
+</div>
 <div id="app">
   <!-- Header -->
   <div class="app-header" id="app-header">
@@ -744,8 +771,8 @@ function renderSettingsContent() {
         <p>${t('about_desc1')}</p>
         <p>${t('about_desc2')}</p>
         <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">
-          <div class="about-kv"><span class="about-kv-key">${t('about_ver')}</span><span class="about-kv-val">1.0</span></div>
-          <div class="about-kv"><span class="about-kv-key">${t('about_base')}</span><span class="about-kv-val">22</span></div>
+          <div class="about-kv"><span class="about-kv-key">${t('about_ver')}</span><span class="about-kv-val">1.1</span></div>
+          <div class="about-kv"><span class="about-kv-key">${t('about_base')}</span><span class="about-kv-val">48</span></div>
           <div class="about-kv"><span class="about-kv-key">${t('about_custom')}</span><span class="about-kv-val">${customs.length}</span></div>
           <div class="about-kv"><span class="about-kv-key">${t('about_edited')}</span><span class="about-kv-val">${Object.keys(overrides).length}</span></div>
           <div class="about-kv"><span class="about-kv-key">${t('about_cem')}</span><span class="about-kv-val">P\u00e8re-Lachaise \u00b7 Montparnasse</span></div>
@@ -763,6 +790,42 @@ function renderSettingsContent() {
       </div>
     </div>
     <div>
+  
+  <!-- NOS AUTRES APPS -->
+      <div class="other-apps-section">
+        <div class="other-apps-title">📱 Nos autres apps</div>
+        <a href="https://apps.apple.com/fr/app/id6760126279" target="_blank" class="other-app-row">
+          <span class="other-app-emoji">🍷</span>
+          <div class="other-app-info"><div class="other-app-name">Cave Manager</div><div class="other-app-sub">Gérez votre cave à vin</div></div>
+          <span class="other-app-arrow">›</span>
+        </a>
+        <a href="https://apps.apple.com/fr/app/id6759870654" target="_blank" class="other-app-row">
+          <span class="other-app-emoji">💊</span>
+          <div class="other-app-info"><div class="other-app-name">MediManager</div><div class="other-app-sub">Suivi de vos médicaments</div></div>
+          <span class="other-app-arrow">›</span>
+        </a>
+        <a href="https://apps.apple.com/fr/app/id6759219383" target="_blank" class="other-app-row">
+          <span class="other-app-emoji">🪦</span>
+          <div class="other-app-info"><div class="other-app-name">Frigo Manager</div><div class="other-app-sub">Gérez vos aliments</div></div>
+          <span class="other-app-arrow">›</span>
+        </a>
+        <a href="https://apps.apple.com/fr/app/id6760890465" target="_blank" class="other-app-row">
+          <span class="other-app-emoji">🍽</span>
+          <div class="other-app-info"><div class="other-app-name">Musées Paris</div><div class="other-app-sub">Guide des Musées parisiens</div></div>
+          <span class="other-app-arrow">›</span>
+        </a>
+        <a href="https://apps.apple.com/fr/app/id6760929391" target="_blank" class="other-app-row">
+          <span class="other-app-emoji">🎭</span>
+          <div class="other-app-info"><div class="other-app-name">Théatres Paris</div><div class="other-app-sub">Guide des théatres parisiens</div></div>
+          <span class="other-app-arrow">›</span>
+        </a>
+        <a href="https://apps.apple.com/fr/app/id6760617965" target="_blank" class="other-app-row">
+          <span class="other-app-emoji">🍽</span>
+          <div class="other-app-info"><div class="other-app-name">MesRestaurants</div><div class="other-app-sub">Votre carnet de restaurants</div></div>
+          <span class="other-app-arrow">›</span>
+        </a>
+      </div>
+
       <p class="settings-section-title">${t('s_import_export')}</p>
       <div class="settings-row" style="margin-bottom:10px;">
         <div class="settings-row-info">
@@ -994,7 +1057,13 @@ const GRAVES_BASE = [
    photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/0/03/Photo_Venice._the_French_actress_Mich%C3%A8le_Morgan_purchases_a_gilded_lead_souvenir_gondola_1952_-_Touring_Club_Italiano_04_1123.jpg/400px-Photo_Venice._the_French_actress_Mich%C3%A8le_Morgan_purchases_a_gilded_lead_souvenir_gondola_1952_-_Touring_Club_Italiano_04_1123.jpg',
    tombPhoto:'',init:'MM',
    desc:'Grande actrice française, prix d\'interprétation à Cannes 1946 pour La Symphonie pastorale. Son regard de brume la rendit mythique dans Quai des brumes (1938). Elle tourna avec les plus grands pendant 60 ans.',
-   descEn:'Great French actress, Best Actress at Cannes 1946 for La Symphonie pastorale. Her misty gaze made her mythical in Port of Shadows (1938). She worked with the greats for 60 years.'}
+   descEn:'Great French actress, Best Actress at Cannes 1946 for La Symphonie pastorale. Her misty gaze made her mythical in Port of Shadows (1938). She worked with the greats for 60 years.'},
+     {id:49,wikiSlug:'Lionel_Jospin',cemetery:'montparnasse',name:'Lionel Jospin',born:1937,died:2026,
+      profession:'Homme d\'état',section:'',lat:48.84045,lng:2.32690,
+      photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Lionel_Jospin%2C_mai_2014%2C_Rennes%2C_France_%28cropped%29.jpg/250px-Lionel_Jospin%2C_mai_2014%2C_Rennes%2C_France_%28cropped%29.jpg',
+      tombPhoto:'',init:'MM',
+      desc:'est un homme d\'État français. Figure du Parti socialiste (PS), il est Premier ministre du 2 juin 1997 au 6 mai 2002.',
+      descEn:'French Statesman, figure of Socialist party, he is Prime minister from 1997 to 2002 '}
 ];
 
 /* ─── Bounds carte par cimetière ─── */
@@ -2191,8 +2260,10 @@ updateChipCounts();
   if(listNav) listNav.classList.add('active');
   document.getElementById('app-header').style.display = '';
   renderList();
-  applyLang();
-  loadWikiImages();
+    applyLang();
+    loadWikiImages();
+
+  
 })();
 });
 </script>
