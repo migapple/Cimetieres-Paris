@@ -3,9 +3,14 @@
 
 ---
 
+## Ajouts 1.1
+- Ajout Lionel Jospin
+- Ajout Nos autres App
+- Suppression du double clic
+
 ## Contenu de l'appli
 
-**22 tombes célèbres** avec pour chacune :
+**48 tombes célèbres** avec pour chacune :
 - Photo (Wikipedia Commons)
 - Dates de naissance/mort
 - Courte biographie
@@ -18,7 +23,7 @@ Jim Morrison · Édith Piaf · Oscar Wilde · Frédéric Chopin · Marcel Proust
 Molière · Honoré de Balzac · Sarah Bernhardt · Yves Montand · Simone Signoret ·
 Guillaume Apollinaire · Eugène Delacroix
 
-### Montparnasse (10)
+### Montparnasse (36)
 Jean-Paul Sartre · Simone de Beauvoir · Serge Gainsbourg · Samuel Beckett ·
 Charles Baudelaire · Guy de Maupassant · Man Ray · Marguerite Duras ·
 Henri Poincaré · Susan Sontag
